@@ -762,16 +762,6 @@ const state = {
   availableRooms: [],
   roomSearchQuery: '',
   roomFilterSubject: 'all',
-
-  // Integração com Conta Google & Inteligência Artificial
-  googleUser: {
-    connected: false,
-    name: '',
-    email: '',
-    picture: '',
-    role: 'teacher'
-  },
-  geminiApiKey: '',
   currentSummaryData: null
 };
 
@@ -796,7 +786,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   setupEventListeners();
   renderQrCode();
-  initGoogleAccount();
   initClassSummarizer();
 
   // Atualização periódica da lista de salas da escola a cada 5 segundos
@@ -1145,14 +1134,24 @@ function updateRoomStats(data) {
 // ========================================================
 const clientTranslationCache = new Map();
 
+function getGoogleLangCode(code) {
+  if (!code) return 'en';
+  const c = code.toLowerCase().trim();
+  if (c.startsWith('zh-cn') || c === 'zh') return 'zh-CN';
+  if (c.startsWith('zh-tw')) return 'zh-TW';
+  if (c.startsWith('fil') || c.startsWith('tl')) return 'tl';
+  if (c.startsWith('he') || c.startsWith('iw')) return 'iw';
+  return c.split('-')[0];
+}
+
 /**
- * Tradução universal ultra-rápida (sub-segundo)
+ * Tradução universal ultra-rápida e sem falhas (~60-150ms)
  */
 async function translateUniversal(text, fromLang, toLang) {
   if (!text || !text.trim()) return '';
   const trimmed = text.trim();
-  const normFrom = fromLang.split('-')[0].toLowerCase();
-  const normTo = toLang.split('-')[0].toLowerCase();
+  const normFrom = getGoogleLangCode(fromLang);
+  const normTo = getGoogleLangCode(toLang);
 
   if (normFrom === normTo && normFrom !== 'auto') {
     return trimmed;
@@ -1163,26 +1162,7 @@ async function translateUniversal(text, fromLang, toLang) {
     return clientTranslationCache.get(cacheKey);
   }
 
-  // 1. Tenta tradução direta pelo navegador via API pública do Google (latência ultrarrápida: ~40-90ms)
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 900);
-    const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${normFrom}&tl=${normTo}&dt=t&q=${encodeURIComponent(trimmed)}`;
-    const res = await fetch(gtxUrl, { signal: controller.signal });
-    clearTimeout(timeoutId);
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data) && Array.isArray(data[0])) {
-        const translated = data[0].map(item => item[0]).join('');
-        if (translated && translated.trim()) {
-          clientTranslationCache.set(cacheKey, translated);
-          return translated;
-        }
-      }
-    }
-  } catch (err) {}
-
-  // 2. Tenta API local do servidor com keep-alive
+  // 1. Prioridade 1: API local do servidor com keep-alive (mesma origem, latência ultrabaixa ~60ms)
   if (state.isServerConnected && !state.isFileProtocol) {
     try {
       const controller = new AbortController();
@@ -1196,15 +1176,57 @@ async function translateUniversal(text, fromLang, toLang) {
       clearTimeout(timeoutId);
       if (res.ok) {
         const data = await res.json();
-        if (data.translated) {
-          clientTranslationCache.set(cacheKey, data.translated);
-          return data.translated;
+        if (data.translated && data.translated.trim()) {
+          const trans = data.translated.trim();
+          // Se traduziu com sucesso (diferente do original ou mesma língua)
+          if (normFrom === normTo || trans.toLowerCase() !== trimmed.toLowerCase()) {
+            clientTranslationCache.set(cacheKey, trans);
+            return trans;
+          }
         }
       }
     } catch (e) {}
   }
 
-  // 3. Fallback MyMemory
+  // 2. Prioridade 2: Tradução direta pelo navegador via translate.google.com (dict-chrome-ex)
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1400);
+    const url = `https://translate.google.com/translate_a/single?client=dict-chrome-ex&sl=${normFrom}&tl=${normTo}&dt=t&q=${encodeURIComponent(trimmed)}`;
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && Array.isArray(data[0])) {
+        const translated = data[0].map(item => (item && item[0]) ? item[0] : '').join('').trim();
+        if (translated) {
+          clientTranslationCache.set(cacheKey, translated);
+          return translated;
+        }
+      }
+    }
+  } catch (err) {}
+
+  // 3. Prioridade 3: Fallback client=gtx direto
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1500);
+    const gtxUrl = `https://translate.google.com/translate_a/single?client=gtx&sl=${normFrom}&tl=${normTo}&dt=t&q=${encodeURIComponent(trimmed)}`;
+    const res = await fetch(gtxUrl, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && Array.isArray(data[0])) {
+        const translated = data[0].map(item => (item && item[0]) ? item[0] : '').join('').trim();
+        if (translated) {
+          clientTranslationCache.set(cacheKey, translated);
+          return translated;
+        }
+      }
+    }
+  } catch (err) {}
+
+  // 4. Fallback MyMemory
   try {
     const memUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(trimmed)}&langpair=${normFrom}|${normTo}`;
     const res = await fetch(memUrl);
@@ -1262,10 +1284,15 @@ async function handleIncomingSpeech(data) {
     lastFinalizedSpeechTime = now;
   }
 
-  let translatedForCurrent = data.translatedText;
+  let translatedForCurrent = (data.translatedText || '').trim();
   const targetCode = state.activeTab === 'student' ? state.studentTargetLang : state.teacherLang;
-  
-  if (!translatedForCurrent || (data.targetLang && data.targetLang !== targetCode)) {
+  const normTarget = getGoogleLangCode(targetCode);
+  const normSource = getGoogleLangCode(data.sourceLang);
+
+  // Se a tradução veio vazia ou veio igual ao texto original quando os idiomas são distintos, traduz imediatamente
+  const isUntranslated = !translatedForCurrent || (normSource !== normTarget && translatedForCurrent.toLowerCase() === (data.originalText || '').trim().toLowerCase());
+
+  if (isUntranslated || (data.targetLang && getGoogleLangCode(data.targetLang) !== normTarget)) {
     translatedForCurrent = await translateUniversal(data.originalText, data.sourceLang, targetCode);
   }
 
@@ -1408,7 +1435,7 @@ let lastFinalizedTime = 0;
 async function handleTeacherSpeechResult(finalText, interimText) {
   const interimBox = document.getElementById('teacher-interim-box');
 
-  // Streaming instantâneo de legendas em tempo real (35ms - digitação simultânea)
+  // Streaming instantâneo de legendas em tempo real (25ms - digitação simultânea)
   if (interimText && interimText.trim()) {
     const trimmedInterim = interimText.trim();
     if (interimBox) {
@@ -1428,17 +1455,17 @@ async function handleTeacherSpeechResult(finalText, interimText) {
           sourceLang: state.teacherLang,
           isInterim: true
         });
-      }, 35);
+      }, 25);
     }
 
-    // Detector de pausa de finalização rápida (< 1 segundo para fala simultânea)
+    // Detector de pausa de finalização rápida (< 500ms para fala simultânea)
     const hasPunctuation = /[.,?!;:]$/.test(trimmedInterim);
-    const delay = hasPunctuation ? 250 : 600;
+    const delay = hasPunctuation ? 180 : 480;
 
     clearTimeout(pauseDetectorTimer);
     pauseDetectorTimer = setTimeout(() => {
       const normInterim = normalizeSpeechText(trimmedInterim);
-      if (normInterim && normInterim !== lastFinalizedSpeechNorm && (Date.now() - lastFinalizedTime > 1600)) {
+      if (normInterim && normInterim !== lastFinalizedSpeechNorm && (Date.now() - lastFinalizedTime > 1200)) {
         lastFinalizedSpeechNorm = normInterim;
         lastFinalizedTime = Date.now();
         if (interimBox) interimBox.style.display = 'none';
@@ -1464,7 +1491,7 @@ async function handleTeacherSpeechResult(finalText, interimText) {
     if (interimBox) interimBox.style.display = 'none';
 
     // Se já foi finalizado recentemente (pelo detector de pausa ou eco de voz), descarta
-    if (normFinal && normFinal === lastFinalizedSpeechNorm && (Date.now() - lastFinalizedTime < 2500)) {
+    if (normFinal && normFinal === lastFinalizedSpeechNorm && (Date.now() - lastFinalizedTime < 2000)) {
       return;
     }
 
@@ -2657,212 +2684,7 @@ function updateRoomDisplay() {
 }
 
 // ========================================================
-// 10. INTEGRAÇÃO COM CONTA GOOGLE & CHAVE GEMINI IA
-// ========================================================
-function initGoogleAccount() {
-  try {
-    const savedUser = localStorage.getItem('yanik_google_user');
-    if (savedUser) {
-      state.googleUser = JSON.parse(savedUser);
-    }
-    const savedKey = localStorage.getItem('yanik_gemini_key');
-    if (savedKey) {
-      state.geminiApiKey = savedKey;
-    }
-  } catch (e) {}
-
-  updateGoogleUI();
-
-  // Listeners dos botões
-  const btnGoogle = document.getElementById('btn-google-account');
-  if (btnGoogle) {
-    btnGoogle.addEventListener('click', openGoogleModal);
-  }
-
-  const btnClose = document.getElementById('btn-close-google-modal');
-  if (btnClose) btnClose.addEventListener('click', closeGoogleModal);
-
-  const btnCloseDone = document.getElementById('btn-close-google-done');
-  if (btnCloseDone) btnCloseDone.addEventListener('click', closeGoogleModal);
-
-  const btnOneTap = document.getElementById('btn-google-onetap');
-  if (btnOneTap) btnOneTap.addEventListener('click', handleGoogleOneTap);
-
-  const btnSaveCustom = document.getElementById('btn-save-google-custom');
-  if (btnSaveCustom) btnSaveCustom.addEventListener('click', saveGoogleCustomProfile);
-
-  const btnSaveGemini = document.getElementById('btn-save-gemini-key');
-  if (btnSaveGemini) btnSaveGemini.addEventListener('click', saveGeminiApiKey);
-
-  const btnSignout = document.getElementById('btn-google-signout');
-  if (btnSignout) btnSignout.addEventListener('click', disconnectGoogleAccount);
-}
-
-function openGoogleModal() {
-  const modal = document.getElementById('google-modal');
-  if (modal) {
-    modal.classList.add('active');
-    const nameInput = document.getElementById('google-input-name');
-    const emailInput = document.getElementById('google-input-email');
-    const keyInput = document.getElementById('google-gemini-key');
-    if (nameInput) nameInput.value = state.googleUser.name || '';
-    if (emailInput) emailInput.value = state.googleUser.email || '';
-    if (keyInput) keyInput.value = state.geminiApiKey || '';
-  }
-}
-
-function closeGoogleModal() {
-  const modal = document.getElementById('google-modal');
-  if (modal) modal.classList.remove('active');
-}
-
-function handleGoogleOneTap() {
-  const sampleNames = ['Prof. Yanik Silva', 'Prof. Yanik', 'Educador Google', 'Coordenação Pedagógica'];
-  const name = state.googleUser.name || sampleNames[Math.floor(Math.random() * sampleNames.length)];
-  const email = state.googleUser.email || 'yanik.educacao@escola.gov.br';
-  const avatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name)}`;
-
-  state.googleUser = {
-    connected: true,
-    name,
-    email,
-    picture: avatar,
-    role: state.activeTab === 'student' ? 'Estudante' : 'Educador(a)'
-  };
-
-  try {
-    localStorage.setItem('yanik_google_user', JSON.stringify(state.googleUser));
-  } catch (e) {}
-
-  updateGoogleUI();
-  showToast(`✓ Conta Google vinculada com sucesso: ${name}!`);
-}
-
-function saveGoogleCustomProfile() {
-  const nameInput = document.getElementById('google-input-name');
-  const emailInput = document.getElementById('google-input-email');
-
-  const name = nameInput ? nameInput.value.trim() : '';
-  const email = emailInput ? emailInput.value.trim() : '';
-
-  if (!name && !email) {
-    alert('Informe ao menos seu nome de exibição ou e-mail Google.');
-    return;
-  }
-
-  const finalName = name || (email ? email.split('@')[0] : 'Usuário Google');
-  const finalEmail = email || 'usuario@gmail.com';
-  const avatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(finalName)}`;
-
-  state.googleUser = {
-    connected: true,
-    name: finalName,
-    email: finalEmail,
-    picture: avatar,
-    role: state.activeTab === 'student' ? 'Estudante' : 'Educador(a)'
-  };
-
-  try {
-    localStorage.setItem('yanik_google_user', JSON.stringify(state.googleUser));
-  } catch (e) {}
-
-  updateGoogleUI();
-  showToast('✓ Perfil Google salvo com sucesso!');
-}
-
-function saveGeminiApiKey() {
-  const keyInput = document.getElementById('google-gemini-key');
-  const key = keyInput ? keyInput.value.trim() : '';
-
-  state.geminiApiKey = key;
-  try {
-    localStorage.setItem('yanik_gemini_key', key);
-  } catch (e) {}
-
-  updateGoogleUI();
-  if (key) {
-    showToast('✓ Chave Google Gemini salva! Resumos por IA ativados.');
-  } else {
-    showToast('Chave removida. Usando motor pedagógico nativo.');
-  }
-}
-
-function disconnectGoogleAccount() {
-  state.googleUser = {
-    connected: false,
-    name: '',
-    email: '',
-    picture: '',
-    role: 'teacher'
-  };
-
-  try {
-    localStorage.removeItem('yanik_google_user');
-  } catch (e) {}
-
-  updateGoogleUI();
-  showToast('Conta Google desconectada.');
-}
-
-function updateGoogleUI() {
-  const btnGoogle = document.getElementById('btn-google-account');
-  const btnText = document.getElementById('google-btn-text');
-  const avatarWrap = document.getElementById('google-avatar-wrap');
-  const profileCard = document.getElementById('google-connected-profile');
-  const profilePic = document.getElementById('google-profile-pic');
-  const profileName = document.getElementById('google-profile-name');
-  const profileEmail = document.getElementById('google-profile-email');
-  const profileRole = document.getElementById('google-profile-role');
-  const keyStatus = document.getElementById('gemini-key-status');
-
-  if (state.googleUser && state.googleUser.connected) {
-    if (btnGoogle) btnGoogle.classList.add('is-connected');
-    if (btnText) btnText.textContent = state.googleUser.name.split(' ')[0] || 'Google';
-    
-    if (avatarWrap) {
-      if (state.googleUser.picture) {
-        avatarWrap.innerHTML = `<img src="${state.googleUser.picture}" class="google-avatar-img" alt="Avatar">`;
-      }
-    }
-
-    if (profileCard) profileCard.style.display = 'flex';
-    if (profilePic && state.googleUser.picture) profilePic.src = state.googleUser.picture;
-    if (profileName) profileName.textContent = state.googleUser.name;
-    if (profileEmail) profileEmail.textContent = state.googleUser.email;
-    if (profileRole) profileRole.textContent = state.googleUser.role || 'Educador';
-
-    const teacherInput = document.getElementById('create-room-teacher');
-    if (teacherInput && (!teacherInput.value || teacherInput.value === 'Prof. Yanik')) {
-      teacherInput.value = state.googleUser.name;
-    }
-  } else {
-    if (btnGoogle) btnGoogle.classList.remove('is-connected');
-    if (btnText) btnText.textContent = 'Conta Google';
-    if (avatarWrap) {
-      avatarWrap.innerHTML = `
-        <svg class="google-svg" viewBox="0 0 24 24" width="16" height="16">
-          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-        </svg>
-      `;
-    }
-    if (profileCard) profileCard.style.display = 'none';
-  }
-
-  if (keyStatus) {
-    if (state.geminiApiKey) {
-      keyStatus.innerHTML = '<span style="color: #10b981; font-weight: 600;">🟢 Chave Gemini Ativa (Resumos Profundos com IA Habilitados)</span>';
-    } else {
-      keyStatus.textContent = '⚪ Nenhuma chave informada - utilizando motor pedagógico nativo';
-      keyStatus.style.color = 'var(--text-muted)';
-    }
-  }
-}
-
-// ========================================================
-// 11. MOTOR DE RESUMO INTELIGENTE DA AULA (AI LESSON SUMMARY)
+// 10. MOTOR DE RESUMO INTELIGENTE DA AULA (AI LESSON SUMMARY)
 // ========================================================
 function initClassSummarizer() {
   const btnTeacher = document.getElementById('btn-summarize-teacher');

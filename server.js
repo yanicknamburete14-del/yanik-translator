@@ -46,34 +46,44 @@ function getLocalIpAddresses() {
   return addresses;
 }
 
+function getGoogleLangCode(code) {
+  if (!code) return 'en';
+  const c = code.toLowerCase().trim();
+  if (c.startsWith('zh-cn') || c === 'zh') return 'zh-CN';
+  if (c.startsWith('zh-tw')) return 'zh-TW';
+  if (c.startsWith('fil') || c.startsWith('tl')) return 'tl';
+  if (c.startsWith('he') || c.startsWith('iw')) return 'iw';
+  return c.split('-')[0];
+}
+
 /**
- * Tradução ultra-rápida via Google Translate (client=dict-chrome-ex) com keep-alive
+ * Tradução ultra-rápida via Google Translate (client=dict-chrome-ex) com keep-alive (~80-150ms)
  */
 function translateText(text, fromLang = 'auto', toLang = 'pt') {
   if (!text || !text.trim()) return Promise.resolve('');
   const trimmed = text.trim();
-  const cacheKey = `${fromLang}->${toLang}:${trimmed}`;
-
-  if (translationCache.has(cacheKey)) {
-    return Promise.resolve(translationCache.get(cacheKey));
-  }
-
-  const normFrom = fromLang.split('-')[0].toLowerCase();
-  const normTo = toLang.split('-')[0].toLowerCase();
+  const normFrom = getGoogleLangCode(fromLang);
+  const normTo = getGoogleLangCode(toLang);
 
   if (normFrom === normTo && normFrom !== 'auto') {
     return Promise.resolve(trimmed);
   }
 
+  const cacheKey = `${normFrom}->${normTo}:${trimmed}`;
+  if (translationCache.has(cacheKey)) {
+    return Promise.resolve(translationCache.get(cacheKey));
+  }
+
   return new Promise((resolve) => {
-    // Usa gtx/dict-chrome-ex com agente persistente (latência de ~60-120ms)
-    const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${normFrom}&tl=${normTo}&dt=t&q=${encodeURIComponent(trimmed)}`;
+    // Usa endpoint translate.google.com (latência comprovada de ~100-150ms)
+    const url = `https://translate.google.com/translate_a/single?client=dict-chrome-ex&sl=${normFrom}&tl=${normTo}&dt=t&q=${encodeURIComponent(trimmed)}`;
     
-    const req = https.get(gtxUrl, {
+    const req = https.get(url, {
       agent: httpsAgent,
-      timeout: 1400,
+      timeout: 2200,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*'
       }
     }, (res) => {
       const chunks = [];
@@ -83,9 +93,9 @@ function translateText(text, fromLang = 'auto', toLang = 'pt') {
           const raw = Buffer.concat(chunks).toString('utf8');
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed) && Array.isArray(parsed[0])) {
-            const translated = parsed[0].map(item => item[0]).join('');
-            if (translated && translated.trim()) {
-              if (translationCache.size > 8000) {
+            const translated = parsed[0].map(item => (item && item[0]) ? item[0] : '').join('').trim();
+            if (translated) {
+              if (translationCache.size > 10000) {
                 const first = translationCache.keys().next().value;
                 translationCache.delete(first);
               }
@@ -95,18 +105,26 @@ function translateText(text, fromLang = 'auto', toLang = 'pt') {
           }
           throw new Error('Resposta vazia');
         } catch (e) {
-          translateMyMemory(trimmed, normFrom, normTo)
+          // Fallback rápido com client=gtx
+          translateGoogleFallback(trimmed, normFrom, normTo)
             .then(res => {
               translationCache.set(cacheKey, res);
               resolve(res);
             })
-            .catch(() => resolve(trimmed));
+            .catch(() => {
+              translateMyMemory(trimmed, normFrom, normTo)
+                .then(res => {
+                  translationCache.set(cacheKey, res);
+                  resolve(res);
+                })
+                .catch(() => resolve(trimmed));
+            });
         }
       });
     });
 
     req.on('error', () => {
-      translateMyMemory(trimmed, normFrom, normTo)
+      translateGoogleFallback(trimmed, normFrom, normTo)
         .then(res => {
           translationCache.set(cacheKey, res);
           resolve(res);
@@ -118,6 +136,28 @@ function translateText(text, fromLang = 'auto', toLang = 'pt') {
       req.destroy();
       resolve(trimmed);
     });
+  });
+}
+
+function translateGoogleFallback(text, from, to) {
+  return new Promise((resolve, reject) => {
+    const url = `https://translate.google.com/translate_a/single?client=gtx&sl=${from}&tl=${to}&dt=t&q=${encodeURIComponent(text)}`;
+    https.get(url, { agent: httpsAgent, timeout: 2000 }, (res) => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          if (Array.isArray(parsed) && Array.isArray(parsed[0])) {
+            const translated = parsed[0].map(item => (item && item[0]) ? item[0] : '').join('').trim();
+            if (translated) return resolve(translated);
+          }
+          reject(new Error('Falha no fallback'));
+        } catch (e) {
+          reject(e);
+        }
+      });
+    }).on('error', reject);
   });
 }
 
