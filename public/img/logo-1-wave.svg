@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="waveGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1d4ed8" />
+      <stop offset="50%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#38bdf8" />
+    </linearGradient>
+    <filter id="glow1" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#2563eb" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  
+  <rect width="200" height="200" rx="44" fill="#0f172a"/>
+  
+  <g filter="url(#glow1)" transform="translate(10, 10)">
+    <!-- Barra Central Inferior (Haste do Y) -->
+    <rect x="83" y="105" width="14" height="48" rx="7" fill="url(#waveGrad)"/>
+    
+    <!-- Onda Sonora Esquerda -->
+    <rect x="63" y="85" width="12" height="38" rx="6" fill="url(#waveGrad)" opacity="0.95"/>
+    <rect x="45" y="65" width="11" height="42" rx="5.5" fill="url(#waveGrad)" opacity="0.85"/>
+    <rect x="28" y="48" width="10" height="38" rx="5" fill="url(#waveGrad)" opacity="0.7"/>
+    <rect x="14" y="58" width="9" height="22" rx="4.5" fill="url(#waveGrad)" opacity="0.5"/>
+    
+    <!-- Onda Sonora Direita -->
+    <rect x="105" y="85" width="12" height="38" rx="6" fill="url(#waveGrad)" opacity="0.95"/>
+    <rect x="124" y="65" width="11" height="42" rx="5.5" fill="url(#waveGrad)" opacity="0.85"/>
+    <rect x="142" y="48" width="10" height="38" rx="5" fill="url(#waveGrad)" opacity="0.7"/>
+    <rect x="157" y="58" width="9" height="22" rx="4.5" fill="url(#waveGrad)" opacity="0.5"/>
+
+    <!-- Ponto central de pulso -->
+    <circle cx="90" cy="98" r="8" fill="#38bdf8"/>
+    <circle cx="90" cy="98" r="4" fill="#ffffff"/>
+  </g>
+</svg>

@@ -1,0 +1,9 @@
+{
+  "name": "yanik-translator",
+  "version": "1.2.0",
+  "description": "Yanik, Translator - Software escolar de tradução simultânea em tempo real",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

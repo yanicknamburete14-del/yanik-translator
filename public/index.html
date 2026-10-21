@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Yanik, Translator - Plataforma de Tradução Simultânea</title>
+  <meta name="description" content="Yanik, Translator - Software profissional de tradução simultânea em tempo real de voz para ambientes educacionais.">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌐</text></svg>">
+</head>
+<body>
+
+  <!-- ======================================================== -->
+  <!-- BARRA DE NAVEGAÇÃO PRINCIPAL (MINIMALISTA & PROFISSIONAL)  -->
+  <!-- ======================================================== -->
+  <header class="site-nav">
+    <div class="nav-container">
+      <div class="brand-wrapper">
+        <div class="brand-icon">YT</div>
+        <div>
+          <h1 class="brand-title">
+            Yanik, Translator
+            <span class="brand-version" data-i18n="app_version">v2.4 Pro</span>
+          </h1>
+        </div>
+      </div>
+
+      <div class="nav-status-group">
+        <div class="status-pill">
+          <span class="status-indicator" id="connection-dot"></span>
+          <span id="connection-text" data-i18n="nav_live">Conectado</span>
+        </div>
+
+        <div class="status-pill" id="header-room-badge">
+          Sala: SALA-1
+        </div>
+
+        <!-- Seletor de Idioma da Tela / Interface Language -->
+        <div class="ui-lang-selector-wrap" title="Idioma da Tela / Screen Language">
+          <span class="ui-lang-label">🌐</span>
+          <select id="ui-lang-select" class="form-select ui-lang-select" aria-label="Idioma da Tela / Screen Language">
+            <option value="pt">Português 🇧🇷</option>
+            <option value="en">English 🇺🇸</option>
+            <option value="hi">हिन्दी (Hindi) 🇮🇳</option>
+            <option value="fr">Français 🇫🇷</option>
+            <option value="es">Español 🇪🇸</option>
+            <option value="de">Deutsch 🇩🇪</option>
+            <option value="it">Italiano 🇮🇹</option>
+            <option value="ar">العربية 🇸🇦</option>
+            <option value="zh-CN">中文 (简体) 🇨🇳</option>
+            <option value="ja">日本語 🇯🇵</option>
+            <option value="ru">Русский 🇷🇺</option>
+            <option value="ko">한국어 🇰🇷</option>
+            <option value="bn">বাংলা 🇮🇳</option>
+            <option value="tr">Türkçe 🇹🇷</option>
+            <option value="vi">Tiếng Việt 🇻🇳</option>
+            <option value="id">Bahasa Indonesia 🇮🇩</option>
+            <option value="uk">Українська 🇺🇦</option>
+            <option value="ur">اردو 🇵🇰</option>
+          </select>
+        </div>
+
+        <!-- Botão Conectar Conta Google -->
+        <button class="btn-google-account" id="btn-google-account" title="Conectar ou gerenciar Conta Google">
+          <span class="google-icon-wrap" id="google-avatar-wrap">
+            <svg class="google-svg" viewBox="0 0 24 24" width="16" height="16">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+            </svg>
+          </span>
+          <span id="google-btn-text">Conta Google</span>
+        </button>
+
+        <button class="btn-action btn-secondary" id="btn-open-projector" title="Exibir QR Code para projeção na sala de aula" data-i18n="nav_projector">
+          📽️ Projetar QR Code
+        </button>
+
+        <button class="btn-icon" id="theme-toggle" title="Alternar tema claro/escuro">
+          🌙
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ======================================================== -->
+  <!-- CONTROLE SEGMENTADO DE AMBIENTES (ABAS)                   -->
+  <!-- ======================================================== -->
+  <nav class="nav-subbar">
+    <div class="segmented-control">
+      <button class="segment-btn tab-btn active" data-tab="teacher">
+        <span>🎙️</span> <span data-i18n="tab_teacher">Mesa do Professor</span>
+      </button>
+      <button class="segment-btn tab-btn" data-tab="student">
+        <span>🎧</span> <span data-i18n="tab_student">Carteira do Aluno</span>
+      </button>
+      <button class="segment-btn tab-btn" data-tab="dialogue">
+        <span>💬</span> <span data-i18n="tab_dialogue">Atendimento 1-para-1</span>
+      </button>
+      <button class="segment-btn tab-btn" data-tab="guide">
+        <span>📖</span> <span data-i18n="tab_guide">Manual de Uso</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ======================================================== -->
+  <!-- CONTEÚDO PRINCIPAL                                       -->
+  <!-- ======================================================== -->
+  <main class="page-container">
+
+    <!-- ======================================================== -->
+    <!-- AMBIENTE 1: MESA DO PROFESSOR (TRANSMISSÃO)              -->
+    <!-- ======================================================== -->
+    <section id="tab-teacher" class="tab-panel active">
+      <div class="layout-grid">
+        
+        <!-- Coluna Principal -->
+        <div>
+          <!-- Barra de Identificação da Sala de Aula do Professor -->
+          <div class="current-room-bar">
+            <div class="current-room-info">
+              <span class="room-tag-badge" id="teacher-current-subject">📐 Matemática</span>
+              <div>
+                <h2 class="current-room-title" id="teacher-current-title">Matemática - 7º Ano A</h2>
+                <div class="current-room-subtitle">
+                  <span id="teacher-current-author">Prof. Yanik</span>
+                  <span>•</span>
+                  <span>Código: <strong id="teacher-current-code" class="code-pill">SALA-1</strong></span>
+                  <span>•</span>
+                  <span id="teacher-current-students">0 aluno(s) conectado(s)</span>
+                </div>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button id="btn-open-create-room" class="btn-action btn-primary" title="Criar ou alterar sala de aula">
+                ➕ Criar / Mudar Sala
+              </button>
+            </div>
+          </div>
+
+          <!-- Notificação de Pergunta / Dúvida do Aluno -->
+          <div id="teacher-alert-box" style="display: none;"></div>
+
+          <div class="panel-card">
+            <div class="panel-header">
+              <div>
+                <span class="panel-title" data-i18n="teacher_card_title">🎙️ Transmissão de Voz</span>
+                <p class="panel-subtitle" data-i18n="teacher_card_desc">Sua fala é capturada, traduzida em tempo real e transmitida aos alunos conectados</p>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);" data-i18n="teacher_input_lang_label">Idioma de Entrada:</label>
+                <select id="teacher-lang-select" class="form-select"></select>
+              </div>
+            </div>
+
+            <!-- Console Central do Microfone -->
+            <div class="mic-console teacher-podium">
+              <button id="teacher-mic-btn" class="mic-btn-minimal" title="Iniciar/Pausar captação de áudio">
+                🎙️
+              </button>
+              <div class="mic-label" id="teacher-mic-status" data-i18n="teacher_mic_status_idle">Toque no microfone para iniciar a transmissão</div>
+              <p class="mic-hint" data-i18n="teacher_mic_hint">Fale com clareza. A tradução para Hindi, Francês, Inglês e outros idiomas ocorre em tempo real.</p>
+
+              <!-- Equalizador de Áudio Minimalista -->
+              <div class="sound-eq equalizer-wave">
+                <div class="eq-column eq-bar"></div>
+                <div class="eq-column eq-bar"></div>
+                <div class="eq-column eq-bar"></div>
+                <div class="eq-column eq-bar"></div>
+                <div class="eq-column eq-bar"></div>
+                <div class="eq-column eq-bar"></div>
+                <div class="eq-column eq-bar"></div>
+                <div class="eq-column eq-bar"></div>
+              </div>
+            </div>
+
+            <!-- Caixa de Texto Preliminar em Tempo Real (Interim Streaming) -->
+            <div id="teacher-interim-box" style="display: none; background: var(--bg-subtle); border: 1px dashed var(--accent); padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 16px; font-size: 1.05rem; color: var(--accent); font-weight: 500;"></div>
+
+            <!-- Entrada Manual por Teclado -->
+            <div style="background: var(--bg-subtle); padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 16px;">
+              <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;" data-i18n="teacher_manual_label">
+                Digitar mensagem ou aviso para a turma (funciona mesmo sem microfone):
+              </label>
+              <div style="display: flex; gap: 8px;">
+                <input type="text" id="manual-teacher-input" class="form-input" style="flex: 1;" placeholder="Ex: Abram o material no capítulo 3..." data-i18n-placeholder="teacher_manual_placeholder">
+                <button id="manual-send-btn" class="btn-action btn-primary" data-i18n="btn_transmit">Transmitir</button>
+              </div>
+            </div>
+
+            <!-- Barra de Ações do Histórico -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; margin-bottom: 12px;">
+              <span style="font-size: 0.92rem; font-weight: 600; color: var(--text-primary);" data-i18n="transcript_card_title">
+                Registro de Transmissão
+              </span>
+              <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                <button id="btn-summarize-teacher" class="btn-action btn-ai-summary" style="font-size: 0.78rem; padding: 6px 12px;" title="Gerar resumo estruturado da aula com inteligência artificial">
+                  ✨ Resumir Aula com IA
+                </button>
+                <button id="btn-export-transcript" class="btn-action btn-secondary" style="font-size: 0.78rem; padding: 6px 10px;" data-i18n="btn_export">
+                  Exportar (.txt)
+                </button>
+                <button id="btn-clear-history" class="btn-action btn-secondary" style="font-size: 0.78rem; padding: 6px 10px;" data-i18n="btn_clear">
+                  Limpar
+                </button>
+              </div>
+            </div>
+
+            <!-- Feed de Transcrições do Professor -->
+            <div id="teacher-feed" class="feed-stream notebook-feed"></div>
+          </div>
+        </div>
+
+        <!-- Coluna Lateral: Conexão e Presença -->
+        <div>
+          <!-- Cartão de Acesso dos Alunos -->
+          <div class="panel-card">
+            <div class="panel-header">
+              <span class="panel-title" data-i18n="student_access_title">Acesso dos Alunos</span>
+            </div>
+
+            <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 12px;" data-i18n="student_access_desc">
+              Exiba este QR Code para que os alunos conectem seus dispositivos na mesma rede Wi-Fi:
+            </p>
+
+            <div class="qr-minimal-card qr-classroom-card">
+              <div class="qr-frame qr-box-inner">
+                <div id="qrcode"></div>
+              </div>
+
+              <div style="display: flex; gap: 6px; margin-top: 8px;">
+                <input type="text" id="share-url-input" class="form-input" style="flex: 1; font-size: 0.76rem;" readonly>
+                <button id="btn-copy-link" class="btn-action btn-secondary" style="padding: 6px 12px; font-size: 0.78rem;" data-i18n="btn_copy">Copiar</button>
+              </div>
+            </div>
+
+            <div style="margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border);">
+              <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;" data-i18n="room_id_label">
+                Identificador da Sala:
+              </label>
+              <div style="display: flex; gap: 6px;">
+                <input type="text" id="room-id-input" class="form-input" value="SALA-1" style="text-transform: uppercase; font-weight: 700; flex: 1;">
+                <button id="btn-change-room" class="btn-action btn-secondary" style="font-size: 0.78rem;" data-i18n="btn_save">Salvar</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cartão de Alunos Conectados -->
+          <div class="panel-card">
+            <div class="panel-header">
+              <span class="panel-title" data-i18n="connected_card_title">Participantes Conectados</span>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-muted);" data-i18n="connected_card_desc">
+              Distribuição de idiomas em tempo real:
+            </p>
+            <div id="connected-stats-pills" class="student-flag-pills stat-pills-wrap">
+              <span class="stat-pill flag-pill">👥 <strong>0 Conectados</strong></span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- AMBIENTE 2: CARTEIRA DO ALUNO (RECEPÇÃO)                 -->
+    <!-- ======================================================== -->
+    <section id="tab-student" class="tab-panel">
+      <!-- Barra da Sala de Aula Conectada (Aluno) -->
+      <div class="current-room-bar">
+        <div class="current-room-info">
+          <span class="room-tag-badge" id="student-current-subject">🏫 Geral</span>
+          <div>
+            <h2 class="current-room-title" id="student-current-title">Carregando sala de aula...</h2>
+            <div class="current-room-subtitle">
+              <span id="student-current-author">Professor</span>
+              <span>•</span>
+              <span>Sala: <strong id="student-current-code" class="code-pill">SALA-1</strong></span>
+            </div>
+          </div>
+        </div>
+        <button id="btn-open-browse-rooms" class="btn-action btn-primary" title="Procurar salas de aula ativas na escola">
+          🔍 Procurar / Trocar de Aula
+        </button>
+      </div>
+
+      <!-- Banner de Ativação do Áudio -->
+      <div id="audio-unlock-banner" class="unlock-bar student-banner-edu">
+        <div>
+          <div class="student-banner-title" data-i18n="unlock_audio_title">🎧 Ativar reprodução de áudio</div>
+          <div class="student-banner-desc" data-i18n="unlock_audio_desc">Toque no botão ao lado para ouvir a tradução em voz alta nos seus fones de ouvido.</div>
+        </div>
+        <button id="unlock-audio-btn" class="unlock-sound-btn" data-i18n="btn_unlock_audio">Ativar Áudio 🔊</button>
+      </div>
+
+      <!-- Configurações da Recepção -->
+      <div class="panel-card">
+        <div class="panel-header">
+          <span class="panel-title" data-i18n="student_panel_title">Recepção de Tradução</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <label style="font-size: 0.84rem; font-weight: 600; color: var(--text-secondary);" data-i18n="student_listen_label">Ouvir e ler em:</label>
+            <select id="student-lang-select" class="form-select" style="font-weight: 600; min-width: 220px;"></select>
+          </div>
+        </div>
+
+        <!-- Controles de Áudio e Texto -->
+        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 4px;">
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; color: var(--text-primary);">
+            <input type="checkbox" id="auto-speak-toggle" checked style="width: 16px; height: 16px; accent-color: var(--accent);">
+            <span data-i18n="student_autospeak_label">Reproduzir voz automaticamente</span>
+          </label>
+
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <button id="test-audio-btn" class="btn-action btn-secondary" style="font-size: 0.78rem; padding: 6px 12px;" data-i18n="btn_test_audio">
+              🔊 Testar Som
+            </button>
+
+            <!-- Tamanho da Fonte -->
+            <div style="display: flex; align-items: center; gap: 3px;">
+              <span style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted); margin-right: 4px;" data-i18n="student_font_label">Texto:</span>
+              <button id="btn-font-sm" class="btn-action btn-secondary" style="padding: 4px 8px; font-size: 0.72rem;">A-</button>
+              <button id="btn-font-md" class="btn-action btn-secondary" style="padding: 4px 8px; font-size: 0.82rem;">A</button>
+              <button id="btn-font-lg" class="btn-action btn-secondary" style="padding: 4px 8px; font-size: 0.94rem;">A+</button>
+            </div>
+
+            <!-- Velocidade de Fala -->
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <span style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);" data-i18n="student_speed_label">Ritmo:</span>
+              <select id="speech-rate-select" class="form-select" style="padding: 4px 8px; font-size: 0.8rem;">
+                <option value="0.85" data-i18n="student_speed_slow">0.85x (Lento)</option>
+                <option value="1.0" selected data-i18n="student_speed_normal">1.0x (Normal)</option>
+                <option value="1.15" data-i18n="student_speed_fast">1.15x (Rápido)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quadro de Legendas em Tempo Real -->
+      <div class="caption-board smart-blackboard size-md" id="student-caption-box">
+        <div class="caption-meta-line board-top-bar">
+          <span id="student-source-badge" data-i18n="caption_waiting">Aguardando fala do professor...</span>
+          <span data-i18n="caption_badge">⚡ Tradução Simultânea</span>
+        </div>
+        <div class="caption-text-main board-caption-box">
+          <div id="student-live-text" data-i18n="caption_default_text">
+            Conecte seus fones de ouvido. Quando o professor falar, as legendas traduzidas aparecerão aqui e serão reproduzidas no seu idioma.
+          </div>
+        </div>
+        <div style="margin-top: 16px; display: flex; justify-content: center;">
+          <button id="btn-replay-live-caption" class="btn-action btn-secondary" style="font-size: 0.82rem; padding: 6px 16px;" data-i18n="btn_replay">
+            🔊 Ouvir Novamente
+          </button>
+        </div>
+      </div>
+
+      <!-- Tirar Dúvida / Pergunta ao Professor (Vice-Versa) -->
+      <div class="student-ask-desk question-box">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+          <strong style="font-size: 0.92rem; color: var(--text-primary);" data-i18n="ask_title">
+            🙋 Fazer Pergunta ao Professor (Vice-Versa)
+          </strong>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);" data-i18n="ask_speak_label">Meu Idioma de Fala:</span>
+            <select id="student-speak-lang-select" class="form-select" style="padding: 4px 8px; font-size: 0.8rem;"></select>
+          </div>
+        </div>
+        <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 14px;" data-i18n="ask_desc">
+          Pressione o botão e fale no seu idioma nativo (ex: Hindi, Francês, Inglês). Sua dúvida será traduzida e entregue diretamente ao professor.
+        </p>
+
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+          <button id="student-question-btn" class="hand-raise-btn" data-i18n="btn_ask_student">
+            🎙️ Fazer Pergunta ao Professor
+          </button>
+          <div id="student-question-preview" style="font-size: 0.85rem; color: var(--purple); font-weight: 600; min-height: 20px;"></div>
+        </div>
+      </div>
+
+      <!-- Histórico de Frases Traduzidas -->
+      <div class="panel-card">
+        <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+          <span class="panel-title" data-i18n="student_history_title">Histórico de Frases Traduzidas</span>
+          <button id="btn-summarize-student" class="btn-action btn-ai-summary" style="font-size: 0.78rem; padding: 6px 12px;" title="Ver resumo inteligente desta aula no seu idioma">
+            ✨ Resumo da Aula
+          </button>
+        </div>
+        <div id="student-feed" class="feed-stream notebook-feed"></div>
+      </div>
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- AMBIENTE 3: ATENDIMENTO PEDAGÓGICO (1-PARA-1)            -->
+    <!-- ======================================================== -->
+    <section id="tab-dialogue" class="tab-panel">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <span class="panel-title" data-i18n="dialogue_card_title">💬 Atendimento Individual e Bilateral</span>
+            <p class="panel-subtitle" data-i18n="dialogue_card_desc">Comunicação direta em dois sentidos para reuniões pedagógicas ou atendimento a responsáveis</p>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+          <!-- Lado A: Educador -->
+          <div style="background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <strong style="color: var(--accent); font-size: 0.95rem;" data-i18n="dialogue_side_a_title">Educador (Lado A)</strong>
+              <select id="diag-lang-a" class="form-select" style="padding: 4px 8px; font-size: 0.82rem;"></select>
+            </div>
+            <button id="mic-diag-a" class="btn-action btn-primary" style="width: 100%; padding: 12px; font-size: 0.92rem;" data-i18n="btn_dialogue_side_a">
+              🎙️ Falar Lado A
+            </button>
+          </div>
+
+          <!-- Lado B: Aluno / Responsável -->
+          <div style="background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <strong style="color: var(--purple); font-size: 0.95rem;" data-i18n="dialogue_side_b_title">Aluno / Responsável (Lado B)</strong>
+              <select id="diag-lang-b" class="form-select" style="padding: 4px 8px; font-size: 0.82rem;"></select>
+            </div>
+            <button id="mic-diag-b" class="btn-action" style="width: 100%; padding: 12px; font-size: 0.92rem; background: var(--purple); color: #fff;" data-i18n="btn_dialogue_side_b">
+              🎙️ Falar Lado B
+            </button>
+          </div>
+        </div>
+
+        <span style="font-weight: 600; font-size: 0.88rem; margin-bottom: 10px; display: block; color: var(--text-secondary);" data-i18n="dialogue_history_label">
+          Diálogo Registrado:
+        </span>
+        <div id="dialogue-messages" class="feed-stream notebook-feed" style="max-height: 380px;"></div>
+      </div>
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- AMBIENTE 4: GUIA DE USO                                  -->
+    <!-- ======================================================== -->
+    <section id="tab-guide" class="tab-panel">
+      <div class="panel-card">
+        <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 10px; color: var(--text-primary);" data-i18n="guide_title">
+          Manual de Operação e Diretrizes de Acessibilidade
+        </h2>
+        <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 20px; font-size: 0.92rem;" data-i18n="guide_desc">
+          O <strong>Yanik, Translator</strong> conecta educadores e alunos em ambientes multilíngues, promovendo a inclusão imediata de estudantes estrangeiros, refugiados e imigrantes com tradução bidirecional em tempo real para Hindi, Português, Inglês, Francês e mais de 100 línguas.
+        </p>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+          <div style="background: var(--bg-subtle); padding: 16px; border-radius: var(--radius-sm); border-left: 3px solid var(--accent);">
+            <h3 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 6px; color: var(--text-primary);" data-i18n="guide_card1_title">1. Conexão Local Wi-Fi</h3>
+            <p style="font-size: 0.84rem; color: var(--text-secondary); line-height: 1.5;" data-i18n="guide_card1_desc">
+              Basta que os celulares e computadores estejam no mesmo roteador ou Wi-Fi. O aluno lê o QR Code da sala e conecta-se imediatamente, sem necessidade de cadastros ou downloads.
+            </p>
+          </div>
+
+          <div style="background: var(--bg-subtle); padding: 16px; border-radius: var(--radius-sm); border-left: 3px solid var(--live-green);">
+            <h3 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 6px; color: var(--text-primary);" data-i18n="guide_card2_title">2. Uso de Fones de Ouvido</h3>
+            <p style="font-size: 0.84rem; color: var(--text-secondary); line-height: 1.5;" data-i18n="guide_card2_desc">
+              Cada aluno pode ouvir o professor no seu idioma nativo através de fones de ouvido (com fio ou Bluetooth), mantendo a sala silenciosa e focada.
+            </p>
+          </div>
+
+          <div style="background: var(--bg-subtle); padding: 16px; border-radius: var(--radius-sm); border-left: 3px solid var(--purple);">
+            <h3 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 6px; color: var(--text-primary);" data-i18n="guide_card3_title">3. Interação Bidirecional</h3>
+            <p style="font-size: 0.84rem; color: var(--text-secondary); line-height: 1.5;" data-i18n="guide_card3_desc">
+              Ao clicar em "Fazer Pergunta", o aluno fala no seu próprio idioma nativo (ex: Hindi), e a pergunta é traduzida e exibida na tela do professor em Português.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: CRIAR OU CONFIGURAR SALA (PROFESSOR)             -->
+  <!-- ======================================================== -->
+  <div id="create-room-modal" class="modal-overlay">
+    <div class="modal-content modal-large">
+      <button class="modal-close" id="btn-close-create-room">✕</button>
+      <div class="modal-header-clean">
+        <h2 class="modal-title-clean">
+          <span>🏫</span> Criar ou Configurar Sala de Aula
+        </h2>
+      </div>
+
+      <form id="form-create-room">
+        <div class="form-group-clean">
+          <label class="form-label-clean">Título da Aula / Assunto:</label>
+          <input type="text" id="create-room-title" class="form-input" style="width: 100%;" placeholder="Ex: Matemática - Álgebra e Frações" required>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group-clean">
+            <label class="form-label-clean">Nome do Professor:</label>
+            <input type="text" id="create-room-teacher" class="form-input" style="width: 100%;" placeholder="Ex: Prof. Yanik" value="Prof. Yanik" required>
+          </div>
+
+          <div class="form-group-clean">
+            <label class="form-label-clean">Disciplina / Matéria:</label>
+            <select id="create-room-subject" class="form-select" style="width: 100%;">
+              <option value="Matemática">📐 Matemática</option>
+              <option value="Ciências">🧪 Ciências / Biologia / Química</option>
+              <option value="História">🌍 História / Geografia</option>
+              <option value="Línguas">📖 Línguas / Literatura</option>
+              <option value="Tecnologia">💻 Tecnologia / Informática</option>
+              <option value="Geral" selected>🏫 Geral / Outros</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group-clean">
+            <label class="form-label-clean">Código da Sala (para os alunos entrarem):</label>
+            <div style="display: flex; gap: 6px;">
+              <input type="text" id="create-room-id" class="form-input" style="flex: 1; text-transform: uppercase; font-weight: 700;" placeholder="Ex: MAT-7A" required>
+              <button type="button" id="btn-generate-room-code" class="btn-action btn-secondary" style="font-size: 0.78rem;">Gerar</button>
+            </div>
+          </div>
+
+          <div class="form-group-clean">
+            <label class="form-label-clean">Idioma de Fala do Professor:</label>
+            <select id="create-room-lang" class="form-select" style="width: 100%;">
+              <!-- preenchido dinamicamente via JS -->
+            </select>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border);">
+          <button type="button" id="btn-cancel-create-room" class="btn-action btn-secondary">Cancelar</button>
+          <button type="submit" class="btn-action btn-primary">🚀 Iniciar Aula nesta Sala</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: PROCURAR SALAS DE AULA ATIVAS (ALUNOS)            -->
+  <!-- ======================================================== -->
+  <div id="browse-rooms-modal" class="modal-overlay">
+    <div class="modal-content modal-large">
+      <button class="modal-close" id="btn-close-browse-rooms">✕</button>
+      <div class="modal-header-clean">
+        <h2 class="modal-title-clean">
+          <span>🔍</span> Procurar Aulas Disponíveis na Escola
+        </h2>
+        <button id="btn-refresh-rooms" class="btn-action btn-secondary" style="font-size: 0.75rem; padding: 4px 10px;">
+          🔄 Atualizar
+        </button>
+      </div>
+
+      <!-- Barra de Pesquisa de Aulas -->
+      <div class="search-bar-wrap">
+        <span class="search-bar-icon">🔍</span>
+        <input type="text" id="input-search-rooms" class="search-input-clean" placeholder="Buscar aula por matéria, professor ou código (ex: Matemática, Yanik, MAT-7A)...">
+      </div>
+
+      <!-- Chips de Filtro por Matéria -->
+      <div class="room-filter-chips">
+        <button class="chip-btn active" data-filter="all">Todas</button>
+        <button class="chip-btn" data-filter="Matemática">📐 Matemática</button>
+        <button class="chip-btn" data-filter="Ciências">🧪 Ciências</button>
+        <button class="chip-btn" data-filter="História">🌍 História / Geo</button>
+        <button class="chip-btn" data-filter="Línguas">📖 Línguas</button>
+        <button class="chip-btn" data-filter="Tecnologia">💻 Tecnologia</button>
+        <button class="chip-btn" data-filter="Geral">🏫 Geral</button>
+      </div>
+
+      <!-- Lista / Grid de Salas -->
+      <div id="room-cards-list" class="room-cards-container">
+        <!-- Renderizado dinamicamente via JS -->
+      </div>
+
+      <!-- Entrada Rápida por Código -->
+      <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+        <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">
+          Tem o código direto da sala?
+        </span>
+        <div style="display: flex; gap: 6px;">
+          <input type="text" id="manual-student-room-code" class="form-input" placeholder="Ex: MAT-7A" style="width: 120px; text-transform: uppercase; font-weight: 700; font-size: 0.82rem; padding: 6px 10px;">
+          <button id="btn-manual-join-room" class="btn-action btn-primary" style="font-size: 0.8rem; padding: 6px 14px;">Entrar na Aula</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL PARA PROJETOR (QR CODE DE SALA)                    -->
+  <!-- ======================================================== -->
+  <div id="projector-modal" class="modal-overlay">
+    <div class="modal-content modal-projector-box">
+      <button class="modal-close modal-close-btn" id="btn-close-projector">✕</button>
+      <h2 style="font-size: 1.3rem; font-weight: 700; margin-bottom: 6px; color: var(--text-primary);" data-i18n="projector_modal_title">Conectar à Aula</h2>
+      <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 18px;" data-i18n="projector_modal_desc">
+        Aponte a câmera do celular para ouvir a tradução da aula no seu idioma
+      </p>
+      <div class="qr-frame" style="padding: 16px; margin-bottom: 14px;">
+        <div id="qrcode-projector"></div>
+      </div>
+      <p style="font-weight: 600; font-size: 1.0rem; color: var(--accent);" id="projector-url-text">
+        http://localhost:3000
+      </p>
+      <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;" data-i18n="projector_wifi_label">Rede Wi-Fi Local</p>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: CONECTAR CONTA GOOGLE & IA                        -->
+  <!-- ======================================================== -->
+  <div id="google-modal" class="modal-overlay">
+    <div class="modal-content modal-google-box">
+      <button class="modal-close" id="btn-close-google-modal">✕</button>
+      
+      <div class="google-modal-header">
+        <div class="google-logo-badge">
+          <svg viewBox="0 0 24 24" width="28" height="28">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+          </svg>
+        </div>
+        <div>
+          <h2 class="modal-title-clean">Conta Google & Inteligência Artificial</h2>
+          <p class="modal-sub-clean">Vincule sua conta Google institucional ou pessoal para sincronizar seu perfil e potencializar resumos de aulas com IA</p>
+        </div>
+      </div>
+
+      <!-- Card de Status do Perfil Conectado -->
+      <div id="google-connected-profile" class="google-profile-card" style="display: none;">
+        <img id="google-profile-pic" class="google-avatar-img" src="" alt="Avatar">
+        <div class="google-profile-meta">
+          <div class="google-profile-name-row">
+            <strong id="google-profile-name">Nome do Usuário</strong>
+            <span class="badge-verified">✓ Conectado</span>
+          </div>
+          <span id="google-profile-email" class="google-profile-email">email@gmail.com</span>
+          <span id="google-profile-role" class="google-profile-role">Educador</span>
+        </div>
+        <button id="btn-google-signout" class="btn-action btn-secondary" style="font-size: 0.76rem; padding: 5px 10px;">
+          Desconectar
+        </button>
+      </div>
+
+      <!-- Opção 1: Conectar Conta Google Rápida -->
+      <div class="google-section-box">
+        <h3 class="google-section-title">1. Identificação com Conta Google</h3>
+        <p class="google-section-desc">Identifique-se como educador ou estudante para que suas salas e perguntas mostrem sua identidade verificada.</p>
+        
+        <div class="form-grid-2">
+          <div class="form-group-clean">
+            <label class="form-label-clean">Nome de Exibição:</label>
+            <input type="text" id="google-input-name" class="form-input" placeholder="Ex: Prof. Yanik ou Lucas Santos">
+          </div>
+          <div class="form-group-clean">
+            <label class="form-label-clean">E-mail Google:</label>
+            <input type="email" id="google-input-email" class="form-input" placeholder="Ex: yanik@escola.gov.br ou @gmail.com">
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-top: 10px; align-items: center; flex-wrap: wrap;">
+          <button id="btn-google-onetap" class="btn-google-official">
+            <svg viewBox="0 0 24 24" width="18" height="18">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+            </svg>
+            <span>Vincular com 1-Clique Google</span>
+          </button>
+          <button id="btn-save-google-custom" class="btn-action btn-primary" style="font-size: 0.82rem; padding: 8px 14px;">
+            Salvar Dados
+          </button>
+        </div>
+      </div>
+
+      <!-- Opção 2: Chave Google Gemini AI -->
+      <div class="google-section-box" style="margin-top: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; flex-wrap: wrap; gap: 6px;">
+          <h3 class="google-section-title">2. Chave Google Gemini AI (Opcional & Gratuita)</h3>
+          <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="gemini-link">
+            Obter chave grátis no Google AI Studio ↗
+          </a>
+        </div>
+        <p class="google-section-desc">
+          Adicione sua chave do Google Gemini para resumos pedagógicos ultra-profundos com IA de última geração. Se não inserir, o sistema usará o motor pedagógico local integrado sem custos.
+        </p>
+
+        <div style="display: flex; gap: 6px; margin-top: 8px;">
+          <input type="password" id="google-gemini-key" class="form-input" style="flex: 1; font-family: monospace;" placeholder="AIzaSy...">
+          <button id="btn-save-gemini-key" class="btn-action btn-secondary" style="font-size: 0.82rem;">Salvar Chave</button>
+        </div>
+        <div id="gemini-key-status" style="font-size: 0.78rem; margin-top: 6px; color: var(--text-muted);">
+          ⚪ Nenhuma chave informada - utilizando motor pedagógico nativo
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border);">
+        <button id="btn-close-google-done" class="btn-action btn-primary" style="padding: 8px 18px;">Concluído</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: RESUMO INTELIGENTE DA AULA                        -->
+  <!-- ======================================================== -->
+  <div id="summary-modal" class="modal-overlay">
+    <div class="modal-content modal-large summary-modal-box">
+      <button class="modal-close" id="btn-close-summary-modal">✕</button>
+
+      <!-- Cabeçalho do Resumo -->
+      <div class="summary-header">
+        <div class="summary-badge-row">
+          <span class="summary-ai-chip" id="summary-engine-badge">✨ Inteligência Artificial Pedagógica</span>
+          <span class="room-tag-badge" id="summary-room-badge">SALA-1</span>
+        </div>
+        <h2 class="summary-title" id="summary-title-text">Resumo Pedagógico da Aula</h2>
+        <div class="summary-meta-line">
+          <span id="summary-author-subject">Prof. Yanik • Matemática</span>
+          <span>•</span>
+          <span id="summary-datetime">21/10/2026</span>
+          <div style="margin-left: auto; display: flex; align-items: center; gap: 6px;">
+            <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);">Idioma do Resumo:</label>
+            <select id="summary-lang-select" class="form-select" style="font-size: 0.8rem; padding: 4px 8px;"></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Corpo do Resumo -->
+      <div id="summary-body-content" class="summary-body">
+        <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+          <div class="typing-cursor" style="display: inline-block; width: 14px; height: 14px; background: var(--accent); border-radius: 50%;"></div>
+          <p style="margin-top: 12px;">Sintetizando e gerando resumo da aula...</p>
+        </div>
+      </div>
+
+      <!-- Barra de Ferramentas / Ações do Resumo -->
+      <div class="summary-footer-actions">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button id="btn-copy-summary" class="btn-action btn-secondary" title="Copiar resumo formatado para a área de transferência">
+            📋 Copiar Resumo
+          </button>
+          <button id="btn-download-summary" class="btn-action btn-secondary" title="Baixar relatório em texto">
+            📥 Baixar (.txt)
+          </button>
+          <button id="btn-print-summary" class="btn-action btn-secondary" title="Imprimir ou Salvar em PDF">
+            🖨️ Imprimir / PDF
+          </button>
+          <button id="btn-speak-summary" class="btn-action btn-secondary" title="Ouvir resumo em voz alta com sintetizador">
+            🔊 Ouvir Resumo
+          </button>
+        </div>
+        <button id="btn-close-summary-footer" class="btn-action btn-primary">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast de Notificação Flutuante -->
+  <div id="app-toast" class="app-toast"></div>
+
+  <!-- RODAPÉ MINIMALISTA -->
+  <footer class="site-footer school-footer">
+    <p data-i18n="footer_text">Yanik, Translator © 2026 • Sistema de Tradução Simultânea em Tempo Real • Compatível com PC, Mac, Android e iOS</p>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/qrcode.min.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
