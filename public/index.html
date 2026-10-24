@@ -37,7 +37,7 @@
 
         <!-- Seletor de Idioma da Tela / Interface Language -->
         <div class="ui-lang-selector-wrap" title="Idioma da Tela / Screen Language">
-          <span class="ui-lang-label">🌐</span>
+          <span class="ui-lang-label">YN</span>
           <select id="ui-lang-select" class="form-select ui-lang-select" aria-label="Idioma da Tela / Screen Language">
             <option value="pt">Português 🇧🇷</option>
             <option value="en">English 🇺🇸</option>
@@ -77,16 +77,16 @@
   <nav class="nav-subbar">
     <div class="segmented-control">
       <button class="segment-btn tab-btn active" data-tab="teacher">
-        <span>🎙️</span> <span data-i18n="tab_teacher">Mesa do Professor</span>
+        <span></span> <span data-i18n="tab_teacher">Mesa do Professor</span>
       </button>
       <button class="segment-btn tab-btn" data-tab="student">
-        <span>🎧</span> <span data-i18n="tab_student">Carteira do Aluno</span>
+        <span></span> <span data-i18n="tab_student">Carteira do Aluno</span>
       </button>
       <button class="segment-btn tab-btn" data-tab="dialogue">
-        <span>💬</span> <span data-i18n="tab_dialogue">Atendimento 1-para-1</span>
+        <span></span> <span data-i18n="tab_dialogue">Atendimento 1-para-1</span>
       </button>
       <button class="segment-btn tab-btn" data-tab="guide">
-        <span>📖</span> <span data-i18n="tab_guide">Manual de Uso</span>
+        <span></span> <span data-i18n="tab_guide">Manual de Uso</span>
       </button>
     </div>
   </nav>
@@ -107,7 +107,7 @@
           <!-- Barra de Identificação da Sala de Aula do Professor -->
           <div class="current-room-bar">
             <div class="current-room-info">
-              <span class="room-tag-badge" id="teacher-current-subject">📐 Matemática</span>
+              <span class="room-tag-badge" id="teacher-current-subject"> Matemática</span>
               <div>
                 <h2 class="current-room-title" id="teacher-current-title">Matemática - 7º Ano A</h2>
                 <div class="current-room-subtitle">
@@ -144,7 +144,7 @@
             <!-- Console Central do Microfone -->
             <div class="mic-console teacher-podium">
               <button id="teacher-mic-btn" class="mic-btn-minimal" title="Iniciar/Pausar captação de áudio">
-                🎙️
+                
               </button>
               <div class="mic-label" id="teacher-mic-status" data-i18n="teacher_mic_status_idle">Toque no microfone para iniciar a transmissão</div>
               <p class="mic-hint" data-i18n="teacher_mic_hint">Fale com clareza. A tradução para Hindi, Francês, Inglês e outros idiomas ocorre em tempo real.</p>
@@ -242,7 +242,7 @@
               Distribuição de idiomas em tempo real:
             </p>
             <div id="connected-stats-pills" class="student-flag-pills stat-pills-wrap">
-              <span class="stat-pill flag-pill">👥 <strong>0 Conectados</strong></span>
+              <span class="stat-pill flag-pill"> <strong>0 Conectados</strong></span>
             </div>
           </div>
         </div>
@@ -257,7 +257,7 @@
       <!-- Barra da Sala de Aula Conectada (Aluno) -->
       <div class="current-room-bar">
         <div class="current-room-info">
-          <span class="room-tag-badge" id="student-current-subject">🏫 Geral</span>
+          <span class="room-tag-badge" id="student-current-subject"> Geral</span>
           <div>
             <h2 class="current-room-title" id="student-current-title">Carregando sala de aula...</h2>
             <div class="current-room-subtitle">
@@ -268,17 +268,17 @@
           </div>
         </div>
         <button id="btn-open-browse-rooms" class="btn-action btn-primary" title="Procurar salas de aula ativas na escola">
-          🔍 Procurar / Trocar de Aula
+           Procurar / Trocar de Aula
         </button>
       </div>
 
       <!-- Banner de Ativação do Áudio -->
       <div id="audio-unlock-banner" class="unlock-bar student-banner-edu">
         <div>
-          <div class="student-banner-title" data-i18n="unlock_audio_title">🎧 Ativar reprodução de áudio</div>
+          <div class="student-banner-title" data-i18n="unlock_audio_title"> Ativar reprodução de áudio</div>
           <div class="student-banner-desc" data-i18n="unlock_audio_desc">Toque no botão ao lado para ouvir a tradução em voz alta nos seus fones de ouvido.</div>
         </div>
-        <button id="unlock-audio-btn" class="unlock-sound-btn" data-i18n="btn_unlock_audio">Ativar Áudio 🔊</button>
+        <button id="unlock-audio-btn" class="unlock-sound-btn" data-i18n="btn_unlock_audio">Ativar Áudio </button>
       </div>
 
       <!-- Configurações da Recepção -->
@@ -300,7 +300,7 @@
 
           <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
             <button id="test-audio-btn" class="btn-action btn-secondary" style="font-size: 0.78rem; padding: 6px 12px;" data-i18n="btn_test_audio">
-              🔊 Testar Som
+               Testar Som
             </button>
 
             <!-- Tamanho da Fonte -->
@@ -328,7 +328,7 @@
       <div class="caption-board smart-blackboard size-md" id="student-caption-box">
         <div class="caption-meta-line board-top-bar">
           <span id="student-source-badge" data-i18n="caption_waiting">Aguardando fala do professor...</span>
-          <span data-i18n="caption_badge">⚡ Tradução Simultânea</span>
+          <span data-i18n="caption_badge"> Tradução Simultânea</span>
         </div>
         <div class="caption-text-main board-caption-box">
           <div id="student-live-text" data-i18n="caption_default_text">
@@ -337,7 +337,7 @@
         </div>
         <div style="margin-top: 16px; display: flex; justify-content: center;">
           <button id="btn-replay-live-caption" class="btn-action btn-secondary" style="font-size: 0.82rem; padding: 6px 16px;" data-i18n="btn_replay">
-            🔊 Ouvir Novamente
+             Ouvir Novamente
           </button>
         </div>
       </div>
@@ -346,7 +346,7 @@
       <div class="student-ask-desk question-box">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
           <strong style="font-size: 0.92rem; color: var(--text-primary);" data-i18n="ask_title">
-            🙋 Fazer Pergunta ao Professor (Vice-Versa)
+             Fazer Pergunta ao Professor (Vice-Versa)
           </strong>
           <div style="display: flex; align-items: center; gap: 6px;">
             <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);" data-i18n="ask_speak_label">Meu Idioma de Fala:</span>
@@ -359,7 +359,7 @@
 
         <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
           <button id="student-question-btn" class="hand-raise-btn" data-i18n="btn_ask_student">
-            🎙️ Fazer Pergunta ao Professor
+             Fazer Pergunta ao Professor
           </button>
           <div id="student-question-preview" style="font-size: 0.85rem; color: var(--purple); font-weight: 600; min-height: 20px;"></div>
         </div>
@@ -370,7 +370,7 @@
         <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
           <span class="panel-title" data-i18n="student_history_title">Histórico de Frases Traduzidas</span>
           <button id="btn-summarize-student" class="btn-action btn-ai-summary" style="font-size: 0.78rem; padding: 6px 12px;" title="Ver resumo inteligente desta aula no seu idioma">
-            ✨ Resumo da Aula
+             Resumo da Aula
           </button>
         </div>
         <div id="student-feed" class="feed-stream notebook-feed"></div>
@@ -384,7 +384,7 @@
       <div class="panel-card">
         <div class="panel-header">
           <div>
-            <span class="panel-title" data-i18n="dialogue_card_title">💬 Atendimento Individual e Bilateral</span>
+            <span class="panel-title" data-i18n="dialogue_card_title"> Atendimento Individual e Bilateral</span>
             <p class="panel-subtitle" data-i18n="dialogue_card_desc">Comunicação direta em dois sentidos para reuniões pedagógicas ou atendimento a responsáveis</p>
           </div>
         </div>
@@ -397,7 +397,7 @@
               <select id="diag-lang-a" class="form-select" style="padding: 4px 8px; font-size: 0.82rem;"></select>
             </div>
             <button id="mic-diag-a" class="btn-action btn-primary" style="width: 100%; padding: 12px; font-size: 0.92rem;" data-i18n="btn_dialogue_side_a">
-              🎙️ Falar Lado A
+               Falar Lado A
             </button>
           </div>
 
@@ -408,7 +408,7 @@
               <select id="diag-lang-b" class="form-select" style="padding: 4px 8px; font-size: 0.82rem;"></select>
             </div>
             <button id="mic-diag-b" class="btn-action" style="width: 100%; padding: 12px; font-size: 0.92rem; background: var(--purple); color: #fff;" data-i18n="btn_dialogue_side_b">
-              🎙️ Falar Lado B
+               Falar Lado B
             </button>
           </div>
         </div>
@@ -520,7 +520,7 @@
       <button class="modal-close" id="btn-close-create-room">✕</button>
       <div class="modal-header-clean">
         <h2 class="modal-title-clean">
-          <span>🏫</span> Criar ou Configurar Sala de Aula
+          <span></span> Criar ou Configurar Sala de Aula
         </h2>
       </div>
 
@@ -568,7 +568,7 @@
 
         <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border);">
           <button type="button" id="btn-cancel-create-room" class="btn-action btn-secondary">Cancelar</button>
-          <button type="submit" class="btn-action btn-primary">🚀 Iniciar Aula nesta Sala</button>
+          <button type="submit" class="btn-action btn-primary"> Iniciar Aula nesta Sala</button>
         </div>
       </form>
     </div>
