@@ -15,12 +15,13 @@ const crypto = require('crypto');
 let PORT = parseInt(process.env.PORT || '3000', 10);
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
-// Agente HTTPS com conexões persistentes para latência ultra-baixa (keep-alive)
+// Agente HTTPS com conexões persistentes IPv4 para latência ultra-baixa (keep-alive)
 const httpsAgent = new https.Agent({
   keepAlive: true,
   maxSockets: 120,
   maxFreeSockets: 30,
-  keepAliveMsecs: 20000
+  keepAliveMsecs: 20000,
+  family: 4
 });
 
 // Cache de traduções na memória para resposta instantânea (0ms para frases repetidas)
@@ -80,7 +81,8 @@ function translateText(text, fromLang = 'auto', toLang = 'pt') {
     
     const req = https.get(url, {
       agent: httpsAgent,
-      timeout: 2200,
+      family: 4,
+      timeout: 3800,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': '*/*'
@@ -108,13 +110,13 @@ function translateText(text, fromLang = 'auto', toLang = 'pt') {
           // Fallback rápido com client=gtx
           translateGoogleFallback(trimmed, normFrom, normTo)
             .then(res => {
-              translationCache.set(cacheKey, res);
+              if (res && res !== trimmed) translationCache.set(cacheKey, res);
               resolve(res);
             })
             .catch(() => {
               translateMyMemory(trimmed, normFrom, normTo)
                 .then(res => {
-                  translationCache.set(cacheKey, res);
+                  if (res && res !== trimmed) translationCache.set(cacheKey, res);
                   resolve(res);
                 })
                 .catch(() => resolve(trimmed));
@@ -126,7 +128,7 @@ function translateText(text, fromLang = 'auto', toLang = 'pt') {
     req.on('error', () => {
       translateGoogleFallback(trimmed, normFrom, normTo)
         .then(res => {
-          translationCache.set(cacheKey, res);
+          if (res && res !== trimmed) translationCache.set(cacheKey, res);
           resolve(res);
         })
         .catch(() => resolve(trimmed));
@@ -142,7 +144,7 @@ function translateText(text, fromLang = 'auto', toLang = 'pt') {
 function translateGoogleFallback(text, from, to) {
   return new Promise((resolve, reject) => {
     const url = `https://translate.google.com/translate_a/single?client=gtx&sl=${from}&tl=${to}&dt=t&q=${encodeURIComponent(text)}`;
-    https.get(url, { agent: httpsAgent, timeout: 2000 }, (res) => {
+    https.get(url, { agent: httpsAgent, family: 4, timeout: 3500 }, (res) => {
       const chunks = [];
       res.on('data', c => chunks.push(c));
       res.on('end', () => {
@@ -464,7 +466,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/stream' && req.method === 'GET') {
     const roomId = (parsedUrl.query.room || 'SALA-1').toUpperCase();
     const role = parsedUrl.query.role || 'student';
-    const lang = (parsedUrl.query.lang || (role === 'teacher' ? 'pt' : 'hi')).toLowerCase();
+    const lang = (parsedUrl.query.lang || '').toLowerCase();
     const clientName = parsedUrl.query.name || (role === 'teacher' ? 'Professor' : 'Aluno');
 
     res.writeHead(200, {

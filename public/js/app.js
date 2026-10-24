@@ -725,12 +725,12 @@ const state = {
   isRecordingDiagA: false,
   isRecordingDiagB: false,
   
-  // Idiomas Selecionados
-  teacherLang: 'pt',
-  studentTargetLang: 'hi',
-  studentSpeakLang: 'hi',
-  diagLangA: 'pt',
-  diagLangB: 'hi',
+  // Idiomas Selecionados - NÃO selecionados automaticamente na abertura da página
+  teacherLang: sessionStorage.getItem('yanik_chosen_teacher_lang') || '',
+  studentTargetLang: sessionStorage.getItem('yanik_chosen_student_lang') || '',
+  studentSpeakLang: sessionStorage.getItem('yanik_chosen_student_lang') || '',
+  diagLangA: '',
+  diagLangB: '',
   
   // Áudio e Síntese
   audioUnlocked: false,
@@ -777,6 +777,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupTabs();
   setupSpeechSynthesis();
   initSpeechRecognition();
+  setupInitialLanguageModal();
   
   // Carrega informações do servidor; se falhar, ativa modo autônomo sem travar
   await loadServerInfo();
@@ -799,6 +800,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       unlockMobileAudio(false);
     }
   }, { once: true });
+
+  // Solicita explicitamente a seleção de idioma inicial se não tiver sido escolhido
+  setTimeout(() => {
+    if (state.activeTab === 'teacher' && !state.teacherLang) {
+      openInitialLanguageModal('teacher');
+    } else if (state.activeTab === 'student' && !state.studentTargetLang) {
+      openInitialLanguageModal('student');
+    }
+  }, 400);
 });
 
 function setupBroadcastChannel() {
@@ -927,25 +937,143 @@ function setupUiLanguageSelector() {
 }
 
 function setupLanguageSelectors() {
-  const populate = (selectId, defaultCode) => {
+  const populate = (selectId, selectedCode, placeholderText) => {
     const sel = document.getElementById(selectId);
     if (!sel) return;
     sel.innerHTML = '';
+
+    const placeholderOpt = document.createElement('option');
+    placeholderOpt.value = '';
+    placeholderOpt.textContent = placeholderText || '-- Selecione o Idioma --';
+    if (!selectedCode) {
+      placeholderOpt.selected = true;
+      placeholderOpt.disabled = true;
+    }
+    sel.appendChild(placeholderOpt);
+
     LANGUAGES.forEach(lang => {
       const opt = document.createElement('option');
       opt.value = lang.code;
       opt.textContent = `${lang.flag} ${lang.native} (${lang.name})`;
-      if (lang.code === defaultCode) opt.selected = true;
+      if (selectedCode && lang.code === selectedCode) opt.selected = true;
       sel.appendChild(opt);
     });
   };
 
-  populate('teacher-lang-select', state.teacherLang);
-  populate('create-room-lang', state.teacherLang);
-  populate('student-lang-select', state.studentTargetLang);
-  populate('student-speak-lang-select', state.studentSpeakLang);
-  populate('diag-lang-a', state.diagLangA);
-  populate('diag-lang-b', state.diagLangB);
+  populate('teacher-lang-select', state.teacherLang, '👉 Selecione seu Idioma de Fala...');
+  populate('create-room-lang', state.teacherLang, '👉 Selecione o Idioma do Professor...');
+  populate('student-lang-select', state.studentTargetLang, '👉 Selecione seu Idioma de Tradução...');
+  populate('student-speak-lang-select', state.studentSpeakLang, '👉 Selecione seu Idioma de Fala...');
+  populate('diag-lang-a', state.diagLangA, '👉 Selecione o Idioma Lado A...');
+  populate('diag-lang-b', state.diagLangB, '👉 Selecione o Idioma Lado B...');
+}
+
+let currentLanguageModalRole = 'teacher';
+
+function setupInitialLanguageModal() {
+  const modal = document.getElementById('initial-lang-modal');
+  const closeBtn = document.getElementById('btn-close-initial-lang');
+  const confirmBtn = document.getElementById('btn-confirm-initial-lang');
+  const select = document.getElementById('initial-lang-select');
+  const chips = document.querySelectorAll('.quick-lang-btn');
+
+  if (select) {
+    select.innerHTML = '<option value="" disabled selected>-- Selecione na lista completa --</option>';
+    LANGUAGES.forEach(lang => {
+      const opt = document.createElement('option');
+      opt.value = lang.code;
+      opt.textContent = `${lang.flag} ${lang.native} (${lang.name})`;
+      select.appendChild(opt);
+    });
+
+    select.addEventListener('change', () => {
+      chips.forEach(b => b.classList.toggle('active', b.getAttribute('data-lang') === select.value));
+    });
+  }
+
+  chips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      const lang = chip.getAttribute('data-lang');
+      chips.forEach(b => b.classList.remove('active'));
+      chip.classList.add('active');
+      if (select) select.value = lang;
+    });
+  });
+
+  if (closeBtn && modal) {
+    closeBtn.addEventListener('click', () => {
+      modal.classList.remove('active');
+    });
+  }
+
+  if (confirmBtn && modal) {
+    confirmBtn.addEventListener('click', () => {
+      const chosenLang = select ? select.value : '';
+      if (!chosenLang) {
+        showToast('⚠️ Por favor, escolha um idioma antes de confirmar.', 'warning');
+        return;
+      }
+      applyChosenLanguage(currentLanguageModalRole, chosenLang);
+      modal.classList.remove('active');
+    });
+  }
+}
+
+function openInitialLanguageModal(role, force = false) {
+  currentLanguageModalRole = role || (state.activeTab === 'teacher' ? 'teacher' : 'student');
+  const modal = document.getElementById('initial-lang-modal');
+  if (!modal) return;
+
+  const title = document.getElementById('initial-lang-title');
+  const subtitle = document.getElementById('initial-lang-subtitle');
+  const select = document.getElementById('initial-lang-select');
+  const chips = document.querySelectorAll('.quick-lang-btn');
+
+  if (currentLanguageModalRole === 'teacher') {
+    if (title) title.textContent = '🎙️ Idioma de Entrada do Professor';
+    if (subtitle) subtitle.textContent = 'Em qual idioma você vai falar na aula? Os alunos receberão traduzido para a língua deles.';
+    if (select) select.value = state.teacherLang || '';
+  } else {
+    if (title) title.textContent = '🎧 Idioma de Tradução do Aluno';
+    if (subtitle) subtitle.textContent = 'Em qual idioma você deseja ouvir e ler a aula transmitida pelo professor?';
+    if (select) select.value = state.studentTargetLang || '';
+  }
+
+  const curVal = select ? select.value : '';
+  chips.forEach(b => b.classList.toggle('active', b.getAttribute('data-lang') === curVal));
+
+  modal.classList.add('active');
+}
+
+function applyChosenLanguage(role, langCode) {
+  const langObj = LANGUAGES.find(l => l.code === langCode);
+  const langName = langObj ? `${langObj.flag} ${langObj.native}` : langCode;
+
+  if (role === 'teacher') {
+    state.teacherLang = langCode;
+    sessionStorage.setItem('yanik_chosen_teacher_lang', langCode);
+    const sel = document.getElementById('teacher-lang-select');
+    if (sel) sel.value = langCode;
+    const createRoomSel = document.getElementById('create-room-lang');
+    if (createRoomSel) createRoomSel.value = langCode;
+    showToast(`✅ Idioma de fala do professor selecionado: ${langName}`, 'success');
+  } else {
+    state.studentTargetLang = langCode;
+    if (!state.studentSpeakLang) state.studentSpeakLang = langCode;
+    sessionStorage.setItem('yanik_chosen_student_lang', langCode);
+    const sel = document.getElementById('student-lang-select');
+    if (sel) sel.value = langCode;
+    const speakSel = document.getElementById('student-speak-lang-select');
+    if (speakSel) speakSel.value = langCode;
+    
+    const liveText = document.getElementById('student-live-text');
+    if (liveText) {
+      liveText.textContent = `Aguardando o professor falar... Sua tradução simultânea será exibida em ${langName}.`;
+    }
+    
+    showToast(`✅ Idioma do aluno selecionado: ${langName}`, 'success');
+    connectRealtime();
+  }
 }
 
 function setupTheme() {
@@ -994,6 +1122,13 @@ function switchTab(tabId) {
     panel.classList.toggle('active', panel.id === `tab-${tabId}`);
   });
 
+  // NÃO selecionar idioma automaticamente: solicita escolha ao entrar no ambiente se ainda não definido
+  if (tabId === 'teacher' && !state.teacherLang) {
+    openInitialLanguageModal('teacher');
+  } else if (tabId === 'student' && !state.studentTargetLang) {
+    openInitialLanguageModal('student');
+  }
+
   connectRealtime();
 }
 
@@ -1036,8 +1171,8 @@ function connectRealtime() {
     state.eventSource.close();
   }
 
-  const currentLang = state.role === 'teacher' ? state.teacherLang : state.studentTargetLang;
-  const clientName = state.role === 'teacher' ? 'Professor' : `Aluno (${currentLang.toUpperCase()})`;
+  const currentLang = (state.role === 'teacher' ? state.teacherLang : state.studentTargetLang) || '';
+  const clientName = state.role === 'teacher' ? 'Professor' : (currentLang ? `Aluno (${currentLang.toUpperCase()})` : 'Aluno');
   const streamUrl = `/api/stream?room=${encodeURIComponent(state.roomId)}&role=${state.role}&lang=${encodeURIComponent(currentLang)}&name=${encodeURIComponent(clientName)}`;
 
   state.eventSource = new EventSource(streamUrl);
@@ -1286,6 +1421,16 @@ async function handleIncomingSpeech(data) {
 
   let translatedForCurrent = (data.translatedText || '').trim();
   const targetCode = state.activeTab === 'student' ? state.studentTargetLang : state.teacherLang;
+  if (!targetCode) {
+    if (state.activeTab === 'student') {
+      const captionEl = document.getElementById('student-live-text');
+      if (captionEl) {
+        captionEl.innerHTML = `<span style="color: #f59e0b; font-weight: 600;">⚠️ Por favor, selecione seu idioma acima para ouvir e ler a tradução da aula.</span>`;
+      }
+      openInitialLanguageModal('student');
+    }
+    return;
+  }
   const normTarget = getGoogleLangCode(targetCode);
   const normSource = getGoogleLangCode(data.sourceLang);
 
@@ -1644,6 +1789,61 @@ function speakText(text, langCode) {
   }
 }
 
+function findBestMaleVoice(targetBcp47) {
+  if (!state.availableVoices || state.availableVoices.length === 0) {
+    if ('speechSynthesis' in window) {
+      state.availableVoices = window.speechSynthesis.getVoices();
+    }
+  }
+  const voices = state.availableVoices || [];
+  if (voices.length === 0) return null;
+
+  const targetLangLower = (targetBcp47 || '').toLowerCase();
+  const prefix = targetLangLower.split('-')[0];
+
+  // Vozes compatíveis com o idioma alvo
+  const langVoices = voices.filter(v => {
+    const vLang = (v.lang || '').toLowerCase();
+    return vLang === targetLangLower || vLang.startsWith(prefix);
+  });
+
+  const maleKeywords = [
+    'male', 'homem', 'masculin', 'david', 'daniel', 'jorge', 'antonio', 'guy',
+    'thomas', 'george', 'paul', 'stefan', 'nicolas', 'alvares', 'mark', 'brian',
+    'tom', 'helmut', 'alex', 'reed', 'alberto', 'ricardo', 'felipe', 'carlos',
+    'enrique', 'pablo', 'sergio', 'pedro', 'manuel', 'marcos'
+  ];
+  const femaleKeywords = [
+    'female', 'mulher', 'femin', 'maria', 'francisca', 'helena', 'luciana',
+    'victoria', 'zira', 'samantha', 'karen', 'monica', 'alice', 'catherine',
+    'anna', 'laura', 'yuri', 'fabiola', 'claudia', 'camila'
+  ];
+
+  // 1. Voz no idioma com nome masculino explícito
+  const maleLangVoice = langVoices.find(v => {
+    const name = (v.name || '').toLowerCase();
+    return maleKeywords.some(kw => name.includes(kw));
+  });
+  if (maleLangVoice) return maleLangVoice;
+
+  // 2. Voz no idioma que NÃO seja explicitamente feminina
+  const nonFemaleLangVoice = langVoices.find(v => {
+    const name = (v.name || '').toLowerCase();
+    return !femaleKeywords.some(kw => name.includes(kw));
+  });
+  if (nonFemaleLangVoice) return nonFemaleLangVoice;
+
+  // 3. Qualquer voz do idioma
+  if (langVoices.length > 0) return langVoices[0];
+
+  // 4. Se não houver voz para o idioma, tenta qualquer voz masculina instalada
+  const globalMale = voices.find(v => {
+    const name = (v.name || '').toLowerCase();
+    return maleKeywords.some(kw => name.includes(kw));
+  });
+  return globalMale || null;
+}
+
 function processNextAudioQueue() {
   if (audioQueue.length === 0) {
     isAudioProcessing = false;
@@ -1658,22 +1858,6 @@ function processNextAudioQueue() {
   lastSpokenTextNorm = item.norm || normalizeSpeechText(item.text);
   lastSpokenTimestamp = Date.now();
 
-  const normLang = (item.lang || 'pt').split('-')[0].toLowerCase();
-
-  let ttsUrl = '';
-  if (state.isServerConnected && !state.isFileProtocol) {
-    ttsUrl = `/api/tts?text=${encodeURIComponent(item.text)}&lang=${normLang}`;
-  } else {
-    ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(item.text)}&tl=${normLang}&client=tw-ob`;
-  }
-
-  const audio = new Audio();
-  currentAudioElement = audio;
-
-  const dynamicRate = audioQueue.length > 0 ? Math.min((state.speechRate || 1.0) * 1.18, 1.35) : (state.speechRate || 1.0);
-  audio.playbackRate = dynamicRate;
-  audio.volume = state.speechVolume || 1.0;
-
   let ended = false;
   const next = () => {
     if (ended) return;
@@ -1681,24 +1865,38 @@ function processNextAudioQueue() {
     processNextAudioQueue();
   };
 
-  audio.onended = next;
-
-  audio.onerror = (e) => {
-    console.warn('Falha no áudio MP3, usando sintetizador nativo:', e);
+  // PRIORIZA SÍNTESE NATIVA DO NAVEGADOR COM VOZ DE HOMEM (LATÊNCIA ZERO E INSTANTÂNEA)
+  if ('speechSynthesis' in window) {
     speakWithBrowserSpeechSynthesis(item.text, item.lang, next);
-  };
+  } else {
+    playFallbackAudioElement(item.text, item.lang, next);
+  }
+}
 
+function playFallbackAudioElement(text, langCode, next) {
+  const normLang = (langCode || 'pt').split('-')[0].toLowerCase();
+  let ttsUrl = '';
+  if (state.isServerConnected && !state.isFileProtocol) {
+    ttsUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=${normLang}`;
+  } else {
+    ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${normLang}&client=tw-ob`;
+  }
+
+  const audio = new Audio();
+  currentAudioElement = audio;
+  audio.playbackRate = state.speechRate || 1.0;
+  audio.volume = state.speechVolume || 1.0;
+  audio.onended = next;
+  audio.onerror = next;
   audio.src = ttsUrl;
-  
+
   const playPromise = audio.play();
   if (playPromise !== undefined) {
     playPromise.then(() => {
       state.audioUnlocked = true;
       hideAudioUnlockBanner();
-    }).catch((err) => {
-      console.warn('Autoplay bloqueado pelo navegador:', err);
-      showAudioUnlockBanner();
-      speakWithBrowserSpeechSynthesis(item.text, item.lang, next);
+    }).catch(() => {
+      next();
     });
   }
 }
@@ -1716,26 +1914,29 @@ function speakWithBrowserSpeechSynthesis(text, langCode, onDone) {
     const utterance = new SpeechSynthesisUtterance(text);
     const targetBcp47 = getBcp47(langCode);
     utterance.lang = targetBcp47;
-    utterance.rate = state.speechRate;
-    utterance.volume = state.speechVolume;
+    utterance.rate = state.speechRate || 1.0;
+    utterance.volume = state.speechVolume || 1.0;
+    
+    // TIMBRE DE HOMEM: Pitch 0.82 produz modulação vocal masculina grave e encorpada
+    utterance.pitch = 0.82;
 
-    const prefix = targetBcp47.split('-')[0].toLowerCase();
-    const matchedVoice = state.availableVoices.find(v => {
-      const vLang = v.lang.toLowerCase();
-      return vLang === targetBcp47.toLowerCase() || vLang.startsWith(prefix);
-    });
-
+    const matchedVoice = findBestMaleVoice(targetBcp47);
     if (matchedVoice) {
       utterance.voice = matchedVoice;
     }
 
-    utterance.onend = () => {
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
       if (onDone) onDone();
     };
 
-    utterance.onerror = () => {
-      if (onDone) onDone();
-    };
+    utterance.onend = finish;
+    utterance.onerror = finish;
+
+    // Timeout de salvaguarda caso o navegador não emita onend
+    setTimeout(finish, Math.max(3000, text.length * 150));
 
     window.speechSynthesis.speak(utterance);
   } catch (err) {
@@ -1955,6 +2156,11 @@ function setupEventListeners() {
   const testAudioBtn = document.getElementById('test-audio-btn');
   if (testAudioBtn) {
     testAudioBtn.onclick = () => {
+      if (!state.studentTargetLang) {
+        showToast('⚠️ Por favor, selecione seu idioma de tradução primeiro.', 'warning');
+        openInitialLanguageModal('student');
+        return;
+      }
       const phrases = {
         pt: "Olá! O som do Yanik Translator está funcionando perfeitamente.",
         en: "Hello! Yanik Translator audio is working properly.",
@@ -1978,6 +2184,11 @@ function setupEventListeners() {
   const replayBtn = document.getElementById('btn-replay-live-caption');
   if (replayBtn) {
     replayBtn.onclick = () => {
+      if (!state.studentTargetLang) {
+        showToast('⚠️ Por favor, selecione seu idioma de tradução primeiro.', 'warning');
+        openInitialLanguageModal('student');
+        return;
+      }
       const captionEl = document.getElementById('student-live-text');
       if (captionEl && captionEl.textContent) {
         speakText(captionEl.textContent, state.studentTargetLang);
@@ -2115,6 +2326,11 @@ function toggleTeacherRecording() {
   if (state.isRecordingTeacher) {
     stopRecording();
   } else {
+    if (!state.teacherLang) {
+      showToast('⚠️ Por favor, selecione seu idioma de fala antes de iniciar a aula.', 'warning');
+      openInitialLanguageModal('teacher');
+      return;
+    }
     stopRecording();
     state.isRecordingTeacher = true;
     startRecognition(state.teacherLang);
@@ -2125,9 +2341,15 @@ function toggleStudentRecording() {
   if (state.isRecordingStudent) {
     stopRecording();
   } else {
+    const langToSpeak = state.studentSpeakLang || state.studentTargetLang;
+    if (!langToSpeak) {
+      showToast('⚠️ Por favor, selecione seu idioma primeiro.', 'warning');
+      openInitialLanguageModal('student');
+      return;
+    }
     stopRecording();
     state.isRecordingStudent = true;
-    startRecognition(state.studentSpeakLang);
+    startRecognition(langToSpeak);
   }
 }
 

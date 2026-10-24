@@ -389,7 +389,7 @@
           </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+        <div class="dialogue-sides-grid">
           <!-- Lado A: Educador -->
           <div style="background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -460,6 +460,59 @@
   </main>
 
   <!-- ======================================================== -->
+  <!-- MODAL: SELEÇÃO EXPLÍCITA DE IDIOMA (PROFESSOR & ALUNO)  -->
+  <!-- ======================================================== -->
+  <div id="initial-lang-modal" class="modal-overlay">
+    <div class="modal-content modal-lang-picker">
+      <div class="modal-header-clean">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.6rem;">YN</span>
+          <div>
+            <h2 class="modal-title-clean" id="initial-lang-title">Selecione o seu Idioma</h2>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;" id="initial-lang-subtitle">
+              Escolha seu idioma para continuar na plataforma
+            </p>
+          </div>
+        </div>
+        <button class="modal-close" id="btn-close-initial-lang" title="Fechar">✕</button>
+      </div>
+
+      <!-- Sugestões Rápidas / Idiomas Mais Frequentes -->
+      <div style="margin: 16px 0 12px 0;">
+        <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 8px;">
+          Idiomas Mais Frequentes:
+        </label>
+        <div class="quick-lang-grid" id="quick-lang-chips">
+          <button type="button" class="quick-lang-btn" data-lang="pt">🇧🇷 Português</button>
+          <button type="button" class="quick-lang-btn" data-lang="hi">🇮🇳 हिन्दी (Hindi)</button>
+          <button type="button" class="quick-lang-btn" data-lang="en">🇺🇸 English</button>
+          <button type="button" class="quick-lang-btn" data-lang="es">🇪🇸 Español</button>
+          <button type="button" class="quick-lang-btn" data-lang="fr">🇫🇷 Français</button>
+          <button type="button" class="quick-lang-btn" data-lang="de">🇩🇪 Deutsch</button>
+          <button type="button" class="quick-lang-btn" data-lang="ar">🇸🇦 العربية</button>
+          <button type="button" class="quick-lang-btn" data-lang="zh-CN">🇨🇳 中文</button>
+          <button type="button" class="quick-lang-btn" data-lang="ja">🇯🇵 日本語</button>
+          <button type="button" class="quick-lang-btn" data-lang="ru">🇷🇺 Русский</button>
+        </div>
+      </div>
+
+      <!-- Seletor Completo de 50+ Idiomas -->
+      <div class="form-group-clean" style="margin-top: 14px;">
+        <label class="form-label-clean" id="initial-lang-dropdown-label">Ou selecione na lista com mais de 50 idiomas:</label>
+        <select id="initial-lang-select" class="form-select" style="width: 100%; font-size: 0.95rem; padding: 10px 12px; font-weight: 600;">
+          <option value="" disabled selected>-- Selecione um Idioma --</option>
+        </select>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border);">
+        <button type="button" id="btn-confirm-initial-lang" class="btn-action btn-primary" style="width: 100%; padding: 12px; font-size: 0.95rem; font-weight: 700;">
+           Confirmar Idioma e Começar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
   <!-- MODAL: CRIAR OU CONFIGURAR SALA (PROFESSOR)             -->
   <!-- ======================================================== -->
   <div id="create-room-modal" class="modal-overlay">
@@ -486,12 +539,12 @@
           <div class="form-group-clean">
             <label class="form-label-clean">Disciplina / Matéria:</label>
             <select id="create-room-subject" class="form-select" style="width: 100%;">
-              <option value="Matemática">📐 Matemática</option>
-              <option value="Ciências">🧪 Ciências / Biologia / Química</option>
-              <option value="História">🌍 História / Geografia</option>
-              <option value="Línguas">📖 Línguas / Literatura</option>
-              <option value="Tecnologia">💻 Tecnologia / Informática</option>
-              <option value="Geral" selected>🏫 Geral / Outros</option>
+              <option value="Matemática"> Matemática</option>
+              <option value="Ciências"> Ciências / Biologia / Química</option>
+              <option value="História"> História / Geografia</option>
+              <option value="Línguas"> Línguas / Literatura</option>
+              <option value="Tecnologia">Tecnologia / Informática</option>
+              <option value="Geral" selected> Geral / Outros</option>
             </select>
           </div>
         </div>
@@ -532,7 +585,7 @@
           <span>🔍</span> Procurar Aulas Disponíveis na Escola
         </h2>
         <button id="btn-refresh-rooms" class="btn-action btn-secondary" style="font-size: 0.75rem; padding: 4px 10px;">
-          🔄 Atualizar
+           Atualizar
         </button>
       </div>
 
@@ -545,12 +598,12 @@
       <!-- Chips de Filtro por Matéria -->
       <div class="room-filter-chips">
         <button class="chip-btn active" data-filter="all">Todas</button>
-        <button class="chip-btn" data-filter="Matemática">📐 Matemática</button>
-        <button class="chip-btn" data-filter="Ciências">🧪 Ciências</button>
-        <button class="chip-btn" data-filter="História">🌍 História / Geo</button>
-        <button class="chip-btn" data-filter="Línguas">📖 Línguas</button>
-        <button class="chip-btn" data-filter="Tecnologia">💻 Tecnologia</button>
-        <button class="chip-btn" data-filter="Geral">🏫 Geral</button>
+        <button class="chip-btn" data-filter="Matemática"> Matemática</button>
+        <button class="chip-btn" data-filter="Ciências">Ciências</button>
+        <button class="chip-btn" data-filter="História"> História / Geo</button>
+        <button class="chip-btn" data-filter="Línguas"> Línguas</button>
+        <button class="chip-btn" data-filter="Tecnologia"> Tecnologia</button>
+        <button class="chip-btn" data-filter="Geral"> Geral</button>
       </div>
 
       <!-- Lista / Grid de Salas -->
@@ -628,16 +681,16 @@
       <div class="summary-footer-actions">
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
           <button id="btn-copy-summary" class="btn-action btn-secondary" title="Copiar resumo formatado para a área de transferência">
-            📋 Copiar Resumo
+             Copiar Resumo
           </button>
           <button id="btn-download-summary" class="btn-action btn-secondary" title="Baixar relatório em texto">
-            📥 Baixar (.txt)
+             Baixar (.txt)
           </button>
           <button id="btn-print-summary" class="btn-action btn-secondary" title="Imprimir ou Salvar em PDF">
-            🖨️ Imprimir / PDF
+             Imprimir / PDF
           </button>
           <button id="btn-speak-summary" class="btn-action btn-secondary" title="Ouvir resumo em voz alta com sintetizador">
-            🔊 Ouvir Resumo
+             Ouvir Resumo
           </button>
         </div>
         <button id="btn-close-summary-footer" class="btn-action btn-primary">Fechar</button>

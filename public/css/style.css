@@ -1329,3 +1329,283 @@ body {
     display: none !important;
   }
 }
+
+/* ========================================================
+   GRID DE ATENDIMENTO 1-PARA-1 & MODAL DE IDIOMA INICIAL
+   ======================================================== */
+.dialogue-sides-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.modal-lang-picker {
+  max-width: 520px;
+  width: 94vw;
+}
+
+.quick-lang-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.quick-lang-btn {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.quick-lang-btn:hover, .quick-lang-btn.active {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+}
+
+/* ========================================================
+   RESPONSIVIDADE COMPLETA PARA CELULAR (Telas <= 768px e <= 480px)
+   Garante interface limpa, sem quebras nem sobreposições
+   ======================================================== */
+@media (max-width: 768px) {
+  .site-nav {
+    position: sticky;
+    top: 0;
+  }
+
+  .nav-container {
+    padding: 10px 14px;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .brand-title {
+    font-size: 0.95rem;
+  }
+
+  .brand-version {
+    display: none;
+  }
+
+  .nav-status-group {
+    gap: 6px;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  #header-room-badge {
+    display: inline-flex;
+  }
+
+  .ui-lang-selector-wrap {
+    padding: 3px 8px;
+  }
+
+  .ui-lang-select {
+    font-size: 0.74rem !important;
+  }
+
+  #btn-open-projector {
+    padding: 5px 8px;
+    font-size: 0.75rem;
+  }
+
+  .nav-subbar {
+    padding: 6px 12px;
+  }
+
+  .segmented-control {
+    gap: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  .segment-btn {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+    min-height: 40px;
+  }
+
+  .page-container {
+    padding: 12px 10px;
+  }
+
+  .layout-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .current-room-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px 14px;
+  }
+
+  .current-room-info {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .current-room-bar button, .current-room-bar .btn-action {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .panel-card {
+    padding: 14px 12px;
+  }
+
+  .panel-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .panel-header > div:last-child {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .panel-header select, #student-lang-select, #teacher-lang-select {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .dialogue-sides-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .modal-content {
+    width: 95vw !important;
+    max-width: 95vw !important;
+    padding: 16px 12px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .modal-large {
+    max-width: 95vw;
+  }
+
+  .caption-board {
+    padding: 16px 12px;
+    min-height: 130px;
+  }
+
+  .caption-text-main {
+    font-size: 1.15rem;
+    min-height: 60px;
+  }
+
+  .student-banner-edu {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    text-align: center;
+  }
+
+  .student-banner-edu button {
+    width: 100%;
+  }
+
+  .student-ask-desk {
+    padding: 14px 12px;
+  }
+
+  .student-ask-desk button {
+    width: 100%;
+  }
+
+  .summary-meta-line {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .summary-meta-line > div:last-child {
+    margin-left: 0 !important;
+    width: 100%;
+  }
+
+  .summary-meta-line select {
+    flex: 1;
+  }
+
+  .summary-footer-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .summary-footer-actions > div {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .summary-footer-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .nav-container {
+    padding: 8px 10px;
+  }
+
+  .brand-title {
+    font-size: 0.9rem;
+  }
+
+  .status-pill {
+    padding: 3px 8px;
+    font-size: 0.72rem;
+  }
+
+  .quick-lang-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .mic-console.teacher-podium {
+    padding: 20px 8px;
+  }
+
+  .mic-btn-minimal {
+    width: 68px;
+    height: 68px;
+    font-size: 28px;
+  }
+
+  .mic-label {
+    font-size: 0.92rem;
+  }
+
+  .caption-board {
+    padding: 14px 10px;
+  }
+
+  .caption-text-main {
+    font-size: 1.05rem;
+  }
+
+  .feed-stream {
+    max-height: 280px;
+  }
+}
