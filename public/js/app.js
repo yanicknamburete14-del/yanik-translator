@@ -2507,8 +2507,12 @@ function switchTab(tabId) {
 }
 
 // ========================================================
-// 2. CONEXÃO EM TEMPO REAL E FALLBACK INTELIGENTE
 // ========================================================
+// 2. CONEXÃO EM TEMPO REAL E RESILIÊNCIA INTELIGENTE
+// ========================================================
+let serverInfoRetryTimer = null;
+let sseReconnectTimer = null;
+
 async function loadServerInfo() {
   if (state.isFileProtocol) {
     setStandaloneMode();
@@ -2516,23 +2520,44 @@ async function loadServerInfo() {
   }
 
   try {
-    const res = await fetch('/api/info', { cache: 'no-cache' });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch('/api/info', { cache: 'no-cache', signal: controller.signal });
+    clearTimeout(timeoutId);
+
     if (res.ok) {
+      if (serverInfoRetryTimer) {
+        clearTimeout(serverInfoRetryTimer);
+        serverInfoRetryTimer = null;
+      }
       state.serverInfo = await res.json();
       state.isServerConnected = true;
       renderShareLinks();
       updateConnectionStatus(true, 'Conectado');
+      connectRealtime();
+      fetchAvailableRooms();
     } else {
-      setStandaloneMode();
+      scheduleServerInfoRetry();
     }
   } catch (err) {
-    setStandaloneMode();
+    scheduleServerInfoRetry();
+  }
+}
+
+function scheduleServerInfoRetry() {
+  if (state.isFileProtocol) return;
+  setStandaloneMode();
+  updateConnectionStatus(false, 'Conectando...');
+  if (!serverInfoRetryTimer) {
+    serverInfoRetryTimer = setTimeout(() => {
+      serverInfoRetryTimer = null;
+      loadServerInfo();
+    }, 2500);
   }
 }
 
 function setStandaloneMode() {
   state.isServerConnected = false;
-  updateConnectionStatus(true, 'Modo Direto / Offline');
   renderShareLinks();
 }
 
@@ -2542,7 +2567,8 @@ function connectRealtime() {
   }
 
   if (state.eventSource) {
-    state.eventSource.close();
+    try { state.eventSource.close(); } catch (e) {}
+    state.eventSource = null;
   }
 
   const currentLang = (state.role === 'teacher' ? state.teacherLang : state.studentTargetLang) || '';
@@ -2552,11 +2578,25 @@ function connectRealtime() {
   state.eventSource = new EventSource(streamUrl);
 
   state.eventSource.onopen = () => {
+    if (sseReconnectTimer) {
+      clearTimeout(sseReconnectTimer);
+      sseReconnectTimer = null;
+    }
     updateConnectionStatus(true, 'Conectado');
   };
 
   state.eventSource.onerror = () => {
-    updateConnectionStatus(true, 'Modo Direto / Offline');
+    if (state.eventSource && state.eventSource.readyState === EventSource.CONNECTING) {
+      updateConnectionStatus(false, 'Reconectando...');
+    } else {
+      updateConnectionStatus(false, 'Modo Direto / Offline');
+      if (!sseReconnectTimer) {
+        sseReconnectTimer = setTimeout(() => {
+          sseReconnectTimer = null;
+          loadServerInfo();
+        }, 3000);
+      }
+    }
   };
 
   state.eventSource.onmessage = (event) => {
@@ -2579,8 +2619,10 @@ function updateConnectionStatus(online, labelKeyOrText) {
   }
   if (text) {
     let label = labelKeyOrText;
-    if (labelKeyOrText === 'Conectado') label = t.nav_live;
-    else if (labelKeyOrText === 'Modo Direto / Offline') label = t.nav_direct;
+    if (labelKeyOrText === 'Conectado') label = t.nav_live || 'Ao Vivo';
+    else if (labelKeyOrText === 'Modo Direto / Offline') label = t.nav_direct || 'Modo Direto / Offline';
+    else if (labelKeyOrText === 'Conectando...') label = state.uiLang === 'en' ? 'Connecting...' : (t.nav_connecting || 'Conectando...');
+    else if (labelKeyOrText === 'Reconectando...') label = state.uiLang === 'en' ? 'Reconnecting...' : (t.nav_reconnecting || 'Reconectando...');
     text.textContent = label;
   }
 }
@@ -3854,15 +3896,27 @@ function updateStudentLanguageOnServer(newLang) {
 // ========================================================
 function getStudentJoinUrl() {
   const uiParam = state.uiLang && state.uiLang !== 'pt' ? `&uiLang=${encodeURIComponent(state.uiLang)}` : '';
-  const langParam = encodeURIComponent(state.studentTargetLang);
-  
+  const langParam = encodeURIComponent(state.studentTargetLang || '');
+  const roomParam = encodeURIComponent(state.roomId || 'SALA-1');
+
+  // Se estiver hospedado em domínio público na web (como https://yanik-translator.onrender.com)
+  if (typeof window !== 'undefined' && window.location && window.location.origin && !state.isFileProtocol) {
+    const host = window.location.hostname;
+    if (host !== 'localhost' && host !== '127.0.0.1' && !host.startsWith('192.168.') && !host.startsWith('10.') && !host.startsWith('172.')) {
+      return `${window.location.origin}/?room=${roomParam}&role=student&lang=${langParam}${uiParam}`;
+    }
+  }
+
+  // Se estiver na rede local Wi-Fi, usa o IP da máquina para os celulares dos alunos
   if (state.serverInfo && state.serverInfo.primaryUrl) {
-    return `${state.serverInfo.primaryUrl}/?room=${encodeURIComponent(state.roomId)}&role=student&lang=${langParam}${uiParam}`;
+    return `${state.serverInfo.primaryUrl}/?room=${roomParam}&role=student&lang=${langParam}${uiParam}`;
   }
-  if (!state.isFileProtocol) {
-    return `${window.location.origin}/?room=${encodeURIComponent(state.roomId)}&role=student&lang=${langParam}${uiParam}`;
+
+  if (typeof window !== 'undefined' && window.location && window.location.origin && !state.isFileProtocol) {
+    return `${window.location.origin}/?room=${roomParam}&role=student&lang=${langParam}${uiParam}`;
   }
-  return `http://localhost:3000/?room=${encodeURIComponent(state.roomId)}&role=student&lang=${langParam}${uiParam}`;
+
+  return `http://localhost:3000/?room=${roomParam}&role=student&lang=${langParam}${uiParam}`;
 }
 
 function renderQrCode() {
