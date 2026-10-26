@@ -552,9 +552,12 @@ const server = http.createServer(async (req, res) => {
         // Identifica todos os idiomas demandados pelos ouvintes na sala
         const neededLanguages = new Set();
         for (const sub of room.subscribers) {
-          if (sub.lang) {
+          if (sub.lang && sub.lang.trim()) {
             neededLanguages.add(sub.lang.split('-')[0].toLowerCase());
           }
+        }
+        if (payload.targetLang && payload.targetLang.trim()) {
+          neededLanguages.add(payload.targetLang.split('-')[0].toLowerCase());
         }
         const normSource = sourceLang.split('-')[0].toLowerCase();
         neededLanguages.add(normSource);
@@ -629,6 +632,7 @@ const server = http.createServer(async (req, res) => {
               targetLang: subNormLang,
               originalText: cleanedText,
               translatedText: translatedForSub,
+              translations: translationsByLang,
               isInterim: !!isInterim
             });
 
@@ -655,10 +659,20 @@ const server = http.createServer(async (req, res) => {
         const body = Buffer.concat(chunks).toString('utf8');
         const { roomId = 'SALA-1', clientId, lang } = JSON.parse(body || '{}');
         const room = getRoom(roomId.toUpperCase());
+        let updated = false;
         for (const sub of room.subscribers) {
-          if (sub.id === clientId) {
+          if (clientId && sub.id === clientId) {
             sub.lang = lang;
+            updated = true;
             break;
+          }
+        }
+        if (!updated && room.subscribers.size > 0 && lang) {
+          for (const sub of room.subscribers) {
+            if (sub.role === 'student') {
+              sub.lang = lang;
+              break;
+            }
           }
         }
         broadcastClientCount(room);

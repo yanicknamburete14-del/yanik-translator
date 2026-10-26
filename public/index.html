@@ -60,12 +60,13 @@
           </select>
         </div>
 
-        <button class="btn-action btn-secondary" id="btn-open-projector" title="Exibir QR Code para projeção na sala de aula" data-i18n="nav_projector">
-          📽️ Projetar QR Code
+        <button class="btn-action btn-secondary" id="btn-open-projector" title="Exibir QR Code para projeção na sala de aula">
+          <svg class="ui-icon" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          <span data-i18n="nav_projector">Projetar QR Code</span>
         </button>
 
         <button class="btn-icon" id="theme-toggle" title="Alternar tema claro/escuro">
-          🌙
+          <svg class="ui-icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         </button>
       </div>
     </div>
@@ -77,16 +78,20 @@
   <nav class="nav-subbar">
     <div class="segmented-control">
       <button class="segment-btn tab-btn active" data-tab="teacher">
-        <span></span> <span data-i18n="tab_teacher">Mesa do Professor</span>
+        <svg class="ui-icon" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        <span data-i18n="tab_teacher">Mesa do Professor</span>
       </button>
       <button class="segment-btn tab-btn" data-tab="student">
-        <span></span> <span data-i18n="tab_student">Carteira do Aluno</span>
+        <svg class="ui-icon" viewBox="0 0 24 24"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+        <span data-i18n="tab_student">Carteira do Aluno</span>
       </button>
       <button class="segment-btn tab-btn" data-tab="dialogue">
-        <span></span> <span data-i18n="tab_dialogue">Atendimento 1-para-1</span>
+        <svg class="ui-icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span data-i18n="tab_dialogue">Atendimento 1-para-1</span>
       </button>
       <button class="segment-btn tab-btn" data-tab="guide">
-        <span></span> <span data-i18n="tab_guide">Manual de Uso</span>
+        <svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span data-i18n="tab_guide">Manual de Uso</span>
       </button>
     </div>
   </nav>
@@ -121,7 +126,8 @@
             </div>
             <div style="display: flex; gap: 8px;">
               <button id="btn-open-create-room" class="btn-action btn-primary" title="Criar ou alterar sala de aula">
-                ➕ Criar / Mudar Sala
+                <svg class="ui-icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span data-i18n="btn_create_room">Criar / Mudar Sala</span>
               </button>
             </div>
           </div>
@@ -144,7 +150,7 @@
             <!-- Console Central do Microfone -->
             <div class="mic-console teacher-podium">
               <button id="teacher-mic-btn" class="mic-btn-minimal" title="Iniciar/Pausar captação de áudio">
-                
+                <svg class="podium-mic-icon" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
               </button>
               <div class="mic-label" id="teacher-mic-status" data-i18n="teacher_mic_status_idle">Toque no microfone para iniciar a transmissão</div>
               <p class="mic-hint" data-i18n="teacher_mic_hint">Fale com clareza. A tradução para Hindi, Francês, Inglês e outros idiomas ocorre em tempo real.</p>
@@ -183,7 +189,8 @@
               </span>
               <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
                 <button id="btn-summarize-teacher" class="btn-action btn-ai-summary" style="font-size: 0.78rem; padding: 6px 12px;" title="Gerar resumo estruturado da aula com inteligência artificial">
-                  ✨ Resumir Aula com IA
+                  <svg class="ui-icon" viewBox="0 0 24 24"><path d="M12 2l2.4 5.6L20 10l-5.6 2.4L12 18l-2.4-5.6L4 10l5.6-2.4z"/></svg>
+                  <span data-i18n="btn_summarize_teacher">Resumir Aula com IA</span>
                 </button>
                 <button id="btn-export-transcript" class="btn-action btn-secondary" style="font-size: 0.78rem; padding: 6px 10px;" data-i18n="btn_export">
                   Exportar (.txt)
@@ -268,7 +275,8 @@
           </div>
         </div>
         <button id="btn-open-browse-rooms" class="btn-action btn-primary" title="Procurar salas de aula ativas na escola">
-           Procurar / Trocar de Aula
+          <svg class="ui-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span data-i18n="btn_browse_rooms">Procurar / Trocar de Aula</span>
         </button>
       </div>
 
@@ -299,8 +307,9 @@
           </label>
 
           <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-            <button id="test-audio-btn" class="btn-action btn-secondary" style="font-size: 0.78rem; padding: 6px 12px;" data-i18n="btn_test_audio">
-               Testar Som
+            <button id="test-audio-btn" class="btn-action btn-secondary" style="font-size: 0.78rem; padding: 6px 12px;">
+              <svg class="ui-icon" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+              <span data-i18n="btn_test_audio">Testar Som</span>
             </button>
 
             <!-- Tamanho da Fonte -->
@@ -336,8 +345,9 @@
           </div>
         </div>
         <div style="margin-top: 16px; display: flex; justify-content: center;">
-          <button id="btn-replay-live-caption" class="btn-action btn-secondary" style="font-size: 0.82rem; padding: 6px 16px;" data-i18n="btn_replay">
-             Ouvir Novamente
+          <button id="btn-replay-live-caption" class="btn-action btn-secondary" style="font-size: 0.82rem; padding: 6px 16px;">
+            <svg class="ui-icon" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+            <span data-i18n="btn_replay">Ouvir Novamente</span>
           </button>
         </div>
       </div>
@@ -358,8 +368,9 @@
         </p>
 
         <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
-          <button id="student-question-btn" class="hand-raise-btn" data-i18n="btn_ask_student">
-             Fazer Pergunta ao Professor
+          <button id="student-question-btn" class="hand-raise-btn">
+            <svg class="ui-icon" viewBox="0 0 24 24" style="width: 17px; height: 17px;"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            <span data-i18n="btn_ask_student">Fazer Pergunta ao Professor</span>
           </button>
           <div id="student-question-preview" style="font-size: 0.85rem; color: var(--purple); font-weight: 600; min-height: 20px;"></div>
         </div>
@@ -370,7 +381,8 @@
         <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
           <span class="panel-title" data-i18n="student_history_title">Histórico de Frases Traduzidas</span>
           <button id="btn-summarize-student" class="btn-action btn-ai-summary" style="font-size: 0.78rem; padding: 6px 12px;" title="Ver resumo inteligente desta aula no seu idioma">
-             Resumo da Aula
+            <svg class="ui-icon" viewBox="0 0 24 24"><path d="M12 2l2.4 5.6L20 10l-5.6 2.4L12 18l-2.4-5.6L4 10l5.6-2.4z"/></svg>
+            <span data-i18n="btn_class_summary">Resumo da Aula</span>
           </button>
         </div>
         <div id="student-feed" class="feed-stream notebook-feed"></div>
@@ -396,8 +408,9 @@
               <strong style="color: var(--accent); font-size: 0.95rem;" data-i18n="dialogue_side_a_title">Educador (Lado A)</strong>
               <select id="diag-lang-a" class="form-select" style="padding: 4px 8px; font-size: 0.82rem;"></select>
             </div>
-            <button id="mic-diag-a" class="btn-action btn-primary" style="width: 100%; padding: 12px; font-size: 0.92rem;" data-i18n="btn_dialogue_side_a">
-               Falar Lado A
+            <button id="mic-diag-a" class="btn-action btn-primary" style="width: 100%; padding: 12px; font-size: 0.92rem;">
+              <svg class="ui-icon" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+              <span data-i18n="btn_dialogue_side_a">Falar Lado A</span>
             </button>
           </div>
 
@@ -407,8 +420,9 @@
               <strong style="color: var(--purple); font-size: 0.95rem;" data-i18n="dialogue_side_b_title">Aluno / Responsável (Lado B)</strong>
               <select id="diag-lang-b" class="form-select" style="padding: 4px 8px; font-size: 0.82rem;"></select>
             </div>
-            <button id="mic-diag-b" class="btn-action" style="width: 100%; padding: 12px; font-size: 0.92rem; background: var(--purple); color: #fff;" data-i18n="btn_dialogue_side_b">
-               Falar Lado B
+            <button id="mic-diag-b" class="btn-action" style="width: 100%; padding: 12px; font-size: 0.92rem; background: var(--purple); color: #fff;">
+              <svg class="ui-icon" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+              <span data-i18n="btn_dialogue_side_b">Falar Lado B</span>
             </button>
           </div>
         </div>
@@ -519,14 +533,14 @@
     <div class="modal-content modal-large">
       <button class="modal-close" id="btn-close-create-room">✕</button>
       <div class="modal-header-clean">
-        <h2 class="modal-title-clean">
-          <span></span> Criar ou Configurar Sala de Aula
+        <h2 class="modal-title-clean" data-i18n="modal_create_title">
+          <span>🏫</span> Criar ou Configurar Sala de Aula
         </h2>
       </div>
 
       <form id="form-create-room">
         <div class="form-group-clean">
-          <label class="form-label-clean">Título da Aula / Assunto:</label>
+          <label class="form-label-clean" data-i18n="label_room_title">Título da Aula / Assunto:</label>
           <input type="text" id="create-room-title" class="form-input" style="width: 100%;" placeholder="Ex: Matemática - Álgebra e Frações" required>
         </div>
 
@@ -585,25 +599,49 @@
           <span>🔍</span> Procurar Aulas Disponíveis na Escola
         </h2>
         <button id="btn-refresh-rooms" class="btn-action btn-secondary" style="font-size: 0.75rem; padding: 4px 10px;">
-           Atualizar
+          <svg class="ui-icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          <span data-i18n="btn_refresh">Atualizar</span>
         </button>
       </div>
 
       <!-- Barra de Pesquisa de Aulas -->
       <div class="search-bar-wrap">
-        <span class="search-bar-icon">🔍</span>
+        <span class="search-bar-icon">
+          <svg class="ui-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </span>
         <input type="text" id="input-search-rooms" class="search-input-clean" placeholder="Buscar aula por matéria, professor ou código (ex: Matemática, Yanik, MAT-7A)...">
       </div>
 
       <!-- Chips de Filtro por Matéria -->
       <div class="room-filter-chips">
-        <button class="chip-btn active" data-filter="all">Todas</button>
-        <button class="chip-btn" data-filter="Matemática"> Matemática</button>
-        <button class="chip-btn" data-filter="Ciências">Ciências</button>
-        <button class="chip-btn" data-filter="História"> História / Geo</button>
-        <button class="chip-btn" data-filter="Línguas"> Línguas</button>
-        <button class="chip-btn" data-filter="Tecnologia"> Tecnologia</button>
-        <button class="chip-btn" data-filter="Geral"> Geral</button>
+        <button class="chip-btn active" data-filter="all">
+          <svg class="ui-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          <span data-i18n="filter_all">Todas</span>
+        </button>
+        <button class="chip-btn" data-filter="Matemática">
+          <svg class="ui-icon" viewBox="0 0 24 24"><path d="M3 3v18h18L3 3z"/><path d="M9 15v3m-3-3v3m6-3v3m3-3v3"/></svg>
+          <span data-i18n="subject_math">Matemática</span>
+        </button>
+        <button class="chip-btn" data-filter="Ciências">
+          <svg class="ui-icon" viewBox="0 0 24 24"><path d="M10 2v7.31L4.69 19a2 2 0 0 0 1.7 3h11.22a2 2 0 0 0 1.7-3L14 9.31V2h-4z"/><path d="M8.5 2h7M7 16h10"/></svg>
+          <span data-i18n="subject_science">Ciências</span>
+        </button>
+        <button class="chip-btn" data-filter="História">
+          <svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span data-i18n="subject_history">História / Geo</span>
+        </button>
+        <button class="chip-btn" data-filter="Línguas">
+          <svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          <span data-i18n="subject_languages">Línguas</span>
+        </button>
+        <button class="chip-btn" data-filter="Tecnologia">
+          <svg class="ui-icon" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          <span data-i18n="subject_tech">Tecnologia</span>
+        </button>
+        <button class="chip-btn" data-filter="Geral">
+          <svg class="ui-icon" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <span data-i18n="subject_general">Geral</span>
+        </button>
       </div>
 
       <!-- Lista / Grid de Salas -->
@@ -681,21 +719,24 @@
       <div class="summary-footer-actions">
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
           <button id="btn-copy-summary" class="btn-action btn-secondary" title="Copiar resumo formatado para a área de transferência">
-             Copiar Resumo
+            <svg class="ui-icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span data-i18n="btn_copy_summary">Copiar Resumo</span>
           </button>
           <button id="btn-download-summary" class="btn-action btn-secondary" title="Baixar relatório em texto">
-             Baixar (.txt)
+            <svg class="ui-icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span data-i18n="btn_download_summary">Baixar (.txt)</span>
           </button>
           <button id="btn-print-summary" class="btn-action btn-secondary" title="Imprimir ou Salvar em PDF">
-             Imprimir / PDF
+            <svg class="ui-icon" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            <span data-i18n="btn_print_summary">Imprimir / PDF</span>
           </button>
           <button id="btn-speak-summary" class="btn-action btn-secondary" title="Ouvir resumo em voz alta com sintetizador">
-             Ouvir Resumo
+            <svg class="ui-icon" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+            <span data-i18n="btn_speak_summary">Ouvir Resumo</span>
           </button>
         </div>
-        <button id="btn-close-summary-footer" class="btn-action btn-primary">Fechar</button>
+        <button id="btn-close-summary-footer" class="btn-action btn-primary" data-i18n="btn_close_summary">Fechar</button>
       </div>
-    </div>
   </div>
 
   <!-- Toast de Notificação Flutuante -->

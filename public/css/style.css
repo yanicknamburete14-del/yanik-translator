@@ -77,6 +77,89 @@ body {
 }
 
 /* ========================================================
+   SISTEMA DE ÍCONES MINIMALISTAS VETORIAIS (SVG)
+   Design monocromático elegante (Linear / Heroicons)
+   ======================================================== */
+.ui-icon {
+  width: 15px;
+  height: 15px;
+  display: inline-block;
+  vertical-align: -2.5px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+  transition: stroke 0.15s ease, transform 0.15s ease;
+}
+
+.search-bar-icon .ui-icon {
+  width: 17px;
+  height: 17px;
+  vertical-align: middle;
+  color: var(--text-muted);
+}
+
+.chip-btn .ui-icon {
+  width: 14px;
+  height: 14px;
+  vertical-align: -2px;
+  margin-right: 5px;
+}
+
+.room-tag-badge .ui-icon {
+  width: 13px;
+  height: 13px;
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+
+.tab-btn .ui-icon {
+  width: 16px;
+  height: 16px;
+  vertical-align: -3px;
+  margin-right: 6px;
+}
+
+.btn-action .ui-icon {
+  width: 15px;
+  height: 15px;
+  vertical-align: -2.5px;
+  margin-right: 6px;
+}
+
+.btn-icon .ui-icon {
+  width: 17px;
+  height: 17px;
+  vertical-align: middle;
+  margin-right: 0;
+}
+
+.modal-title-clean .ui-icon {
+  width: 20px;
+  height: 20px;
+  vertical-align: -3.5px;
+  margin-right: 8px;
+}
+
+.podium-mic-icon {
+  width: 32px;
+  height: 32px;
+  stroke: var(--text-primary);
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke 0.2s ease, transform 0.2s ease;
+}
+
+.mic-btn-minimal.recording .podium-mic-icon {
+  stroke: #ffffff;
+  transform: scale(1.08);
+}
+
+/* ========================================================
    HEADER MINIMALISTA E PROFISSIONAL
    ======================================================== */
 .site-nav, .school-header {
