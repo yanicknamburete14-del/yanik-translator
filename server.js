@@ -58,138 +58,115 @@ function getGoogleLangCode(code) {
 }
 
 /**
- * Tradução ultra-rápida via Google Translate (client=dict-chrome-ex) com keep-alive (~80-150ms)
+ * Motor Google Translate 100% ILIMITADO e GRATUITO (Zero limites, qualidade oficial do Google)
  */
-function translateText(text, fromLang = 'auto', toLang = 'pt') {
-  if (!text || !text.trim()) return Promise.resolve('');
+async function translateText(text, fromLang = 'auto', toLang = 'pt') {
+  if (!text || !text.trim()) return '';
   const trimmed = text.trim();
   const normFrom = getGoogleLangCode(fromLang);
   const normTo = getGoogleLangCode(toLang);
 
   if (normFrom === normTo && normFrom !== 'auto') {
-    return Promise.resolve(trimmed);
+    return trimmed;
   }
 
   const cacheKey = `${normFrom}->${normTo}:${trimmed}`;
   if (translationCache.has(cacheKey)) {
-    return Promise.resolve(translationCache.get(cacheKey));
+    const cached = translationCache.get(cacheKey);
+    if (cached && !cached.includes('MYMEMORY') && !cached.includes('WARNING')) {
+      return cached;
+    }
+    translationCache.delete(cacheKey);
   }
 
-  return new Promise((resolve) => {
-    // Usa endpoint translate.google.com (latência comprovada de ~100-150ms)
-    const url = `https://translate.google.com/translate_a/single?client=dict-chrome-ex&sl=${normFrom}&tl=${normTo}&dt=t&q=${encodeURIComponent(trimmed)}`;
-    
-    const req = https.get(url, {
-      agent: httpsAgent,
-      family: 4,
-      timeout: 3800,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': '*/*'
+  const endpoints = [
+    // 1. Google Chrome CDN (clients5.google.com) - Ultrarrápido, sem limite
+    {
+      url: `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=${normFrom}&tl=${normTo}&q=${encodeURIComponent(trimmed)}`,
+      parse: (d) => {
+        const p = JSON.parse(d);
+        if (Array.isArray(p) && typeof p[0] === 'string') return p[0].trim();
+        if (Array.isArray(p) && Array.isArray(p[0])) return p[0].map(x => x[0]).join('').trim();
+        return null;
       }
-    }, (res) => {
-      const chunks = [];
-      res.on('data', chunk => chunks.push(chunk));
-      res.on('end', () => {
-        try {
-          const raw = Buffer.concat(chunks).toString('utf8');
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed) && Array.isArray(parsed[0])) {
-            const translated = parsed[0].map(item => (item && item[0]) ? item[0] : '').join('').trim();
-            if (translated) {
-              if (translationCache.size > 10000) {
-                const first = translationCache.keys().next().value;
-                translationCache.delete(first);
+    },
+    // 2. Google Translate Official App Engine (client=it)
+    {
+      url: `https://translate.google.com/translate_a/single?client=it&sl=${normFrom}&tl=${normTo}&dt=t&q=${encodeURIComponent(trimmed)}`,
+      parse: (d) => {
+        const p = JSON.parse(d);
+        if (Array.isArray(p) && Array.isArray(p[0])) return p[0].map(x => x[0]).join('').trim();
+        return null;
+      }
+    },
+    // 3. Google Translate Web Extension Engine (client=dict-chrome-ex)
+    {
+      url: `https://translate.google.com/translate_a/single?client=dict-chrome-ex&sl=${normFrom}&tl=${normTo}&dt=t&q=${encodeURIComponent(trimmed)}`,
+      parse: (d) => {
+        const p = JSON.parse(d);
+        if (Array.isArray(p) && Array.isArray(p[0])) return p[0].map(x => x[0]).join('').trim();
+        return null;
+      }
+    },
+    // 4. Google Translate Android Engine (client=tw-ob)
+    {
+      url: `https://translate.google.com/translate_a/single?client=tw-ob&sl=${normFrom}&tl=${normTo}&dt=t&q=${encodeURIComponent(trimmed)}`,
+      parse: (d) => {
+        const p = JSON.parse(d);
+        if (Array.isArray(p) && Array.isArray(p[0])) return p[0].map(x => x[0]).join('').trim();
+        return null;
+      }
+    }
+  ];
+
+  for (const ep of endpoints) {
+    try {
+      const translated = await new Promise((resolve, reject) => {
+        const req = https.get(ep.url, {
+          agent: httpsAgent,
+          family: 4,
+          timeout: 4000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+            'Accept': '*/*'
+          }
+        }, (res) => {
+          if (res.statusCode !== 200) return reject(new Error('HTTP ' + res.statusCode));
+          const chunks = [];
+          res.on('data', c => chunks.push(c));
+          res.on('end', () => {
+            try {
+              const raw = Buffer.concat(chunks).toString('utf8');
+              const resText = ep.parse(raw);
+              if (resText && !resText.includes('MYMEMORY') && !resText.includes('WARNING')) {
+                return resolve(resText);
               }
-              translationCache.set(cacheKey, translated);
-              return resolve(translated);
+              reject(new Error('Parse error or invalid content'));
+            } catch (err) {
+              reject(err);
             }
-          }
-          throw new Error('Resposta vazia');
-        } catch (e) {
-          // Fallback rápido com client=gtx
-          translateGoogleFallback(trimmed, normFrom, normTo)
-            .then(res => {
-              if (res && res !== trimmed) translationCache.set(cacheKey, res);
-              resolve(res);
-            })
-            .catch(() => {
-              translateMyMemory(trimmed, normFrom, normTo)
-                .then(res => {
-                  if (res && res !== trimmed) translationCache.set(cacheKey, res);
-                  resolve(res);
-                })
-                .catch(() => resolve(trimmed));
-            });
-        }
+          });
+        });
+        req.on('error', reject);
+        req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
       });
-    });
 
-    req.on('error', () => {
-      translateGoogleFallback(trimmed, normFrom, normTo)
-        .then(res => {
-          if (res && res !== trimmed) translationCache.set(cacheKey, res);
-          resolve(res);
-        })
-        .catch(() => resolve(trimmed));
-    });
+      if (translated) {
+        if (translationCache.size > 10000) {
+          const first = translationCache.keys().next().value;
+          translationCache.delete(first);
+        }
+        translationCache.set(cacheKey, translated);
+        return translated;
+      }
+    } catch (err) {
+      // continua para o próximo endpoint do Google
+    }
+  }
 
-    req.on('timeout', () => {
-      req.destroy();
-      resolve(trimmed);
-    });
-  });
+  return trimmed;
 }
 
-function translateGoogleFallback(text, from, to) {
-  return new Promise((resolve, reject) => {
-    const url = `https://translate.google.com/translate_a/single?client=gtx&sl=${from}&tl=${to}&dt=t&q=${encodeURIComponent(text)}`;
-    https.get(url, { agent: httpsAgent, family: 4, timeout: 3500 }, (res) => {
-      const chunks = [];
-      res.on('data', c => chunks.push(c));
-      res.on('end', () => {
-        try {
-          const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-          if (Array.isArray(parsed) && Array.isArray(parsed[0])) {
-            const translated = parsed[0].map(item => (item && item[0]) ? item[0] : '').join('').trim();
-            if (translated) return resolve(translated);
-          }
-          reject(new Error('Falha no fallback'));
-        } catch (e) {
-          reject(e);
-        }
-      });
-    }).on('error', reject);
-  });
-}
-
-function translateMyMemory(text, from, to) {
-  return new Promise((resolve, reject) => {
-    const fromCode = from === 'auto' ? 'pt' : from;
-    const memoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${fromCode}|${to}`;
-    https.get(memoryUrl, { timeout: 4500 }, (res) => {
-      const chunks = [];
-      res.on('data', chunk => chunks.push(chunk));
-      res.on('end', () => {
-        try {
-          const raw = Buffer.concat(chunks).toString('utf8');
-          const parsed = JSON.parse(raw);
-          if (parsed && parsed.responseData && parsed.responseData.translatedText) {
-            resolve(parsed.responseData.translatedText);
-          } else {
-            reject(new Error('Falha no MyMemory'));
-          }
-        } catch (e) {
-          reject(e);
-        }
-      });
-    }).on('error', reject);
-  });
-}
-
-/**
- * MIME Types dos arquivos estáticos
- */
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
