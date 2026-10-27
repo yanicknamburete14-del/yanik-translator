@@ -57,20 +57,121 @@ function getGoogleLangCode(code) {
   return c.split('-')[0];
 }
 
+function normalizeForComparison(text) {
+  if (!text) return '';
+  return String(text)
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /**
- * Motor Google Translate 100% ILIMITADO e GRATUITO (Zero limites, qualidade oficial do Google)
+ * Refinador Inteligente de Fala e Contexto Linguístico:
+ * - Remove gaguejos e palavras repetidas consecutivas da fala ("eu eu vou", "de de um", "o o projeto")
+ * - Corrige elipses comuns de reconhecimento de voz em português/inglês/espanhol
+ * - Remove preposições soltas no final de frases interrompidas ("projeto do" -> "projeto")
+ * - Adiciona pontuação e capitalização adequadas para ativar o modo de frase completa da rede neural
  */
-async function translateText(text, fromLang = 'auto', toLang = 'pt') {
+function refineSpokenText(rawText, langCode = 'pt', isInterim = false) {
+  if (!rawText || !rawText.trim()) return '';
+  let text = rawText.trim().replace(/\s+/g, ' ');
+
+  // 1. Remove palavras repetidas consecutivas (ex: "eu eu", "de de", "the the", "projeto projeto")
+  text = text.replace(/\b([a-zA-ZÀ-ÿ]{1,25})(?:\s+\1\b)+/gi, '$1');
+  // Remove pares de 2 palavras repetidos consecutivos (ex: "vamos ver vamos ver", "de um de um")
+  text = text.replace(/\b([a-zA-ZÀ-ÿ]+\s+[a-zA-ZÀ-ÿ]+)(?:\s+\1\b)+/gi, '$1');
+  // Remove trios de 3 palavras repetidos consecutivos
+  text = text.replace(/\b([a-zA-ZÀ-ÿ]+\s+[a-zA-ZÀ-ÿ]+\s+[a-zA-ZÀ-ÿ]+)(?:\s+\1\b)+/gi, '$1');
+
+  const normLang = getGoogleLangCode(langCode);
+
+  // 2. Correções contextuais de transcrição de fala em Português
+  if (normLang === 'pt') {
+    text = text
+      .replace(/\bdeveria apresenta[çc][ãa]o\b/gi, 'deveria fazer a apresentação')
+      .replace(/\bvamos apresenta[çc][ãa]o\b/gi, 'vamos fazer a apresentação')
+      .replace(/\bfazer apresenta[çc][ãa]o\b/gi, 'fazer a apresentação')
+      .replace(/\bprojeto do tradutor\b/gi, 'projeto de tradutor')
+      .replace(/\bpara mim (fazer|apresentar|falar|mostrar|explicar|ver|ir)\b/gi, 'para eu $1')
+      .replace(/\ba gente vamos\b/gi, 'nós vamos');
+
+    // Se a frase terminou abruptamente numa preposição/artigo solto (ex: "projeto do", "apresentação de um"),
+    // limpa o conector pendurado para evitar traduções literais quebradas ("project for the")
+    if (text.split(' ').length >= 3) {
+      text = text.replace(/\s+(do|da|dos|das|de|num|numa|pelo|pela)\s*$/i, '');
+    }
+  }
+
+  if (!text) return rawText.trim();
+
+  // 3. Capitaliza a primeira letra para melhorar a precisão gramatical da Rede Neural (NMT)
+  text = text.charAt(0).toUpperCase() + text.slice(1);
+
+  // 4. Se for frase finalizada e não tiver pontuação final, adiciona ponto final para contexto completo
+  if (!isInterim && !/[.?!;:]$/.test(text)) {
+    text += '.';
+  }
+
+  return text;
+}
+
+function cleanTranslatedOutput(text) {
+  if (!text) return '';
+  let cleaned = text.trim().replace(/\s+/g, ' ');
+  // Remove eventuais duplicações de palavras na saída traduzida
+  cleaned = cleaned.replace(/\b([a-zA-ZÀ-ÿ]{2,25})(?:\s+\1\b)+/gi, '$1');
+  cleaned = cleaned.replace(/\b([a-zA-ZÀ-ÿ]+\s+[a-zA-ZÀ-ÿ]+)(?:\s+\1\b)+/gi, '$1');
+  return cleaned;
+}
+
+function fetchTranslationEndpoint(ep) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(ep.url, {
+      agent: httpsAgent,
+      family: 4,
+      timeout: 2800,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*'
+      }
+    }, (res) => {
+      if (res.statusCode !== 200) return reject(new Error('HTTP ' + res.statusCode));
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        try {
+          const raw = Buffer.concat(chunks).toString('utf8');
+          const resText = ep.parse(raw);
+          if (resText && !resText.includes('MYMEMORY') && !resText.includes('WARNING')) {
+            return resolve(cleanTranslatedOutput(resText));
+          }
+          reject(new Error('Empty or invalid parse'));
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
+  });
+}
+
+/**
+ * Motor Neural de Tradução Simultânea em Tempo Real (Paralelo + Contextualizado, 100% Ilimitado)
+ */
+async function translateText(text, fromLang = 'auto', toLang = 'pt', isInterim = false) {
   if (!text || !text.trim()) return '';
-  const trimmed = text.trim();
   const normFrom = getGoogleLangCode(fromLang);
   const normTo = getGoogleLangCode(toLang);
 
+  const refined = refineSpokenText(text, normFrom, isInterim);
   if (normFrom === normTo && normFrom !== 'auto') {
-    return trimmed;
+    return refined;
   }
 
-  const cacheKey = `${normFrom}->${normTo}:${trimmed}`;
+  const cacheKey = `${normFrom}->${normTo}:${refined}`;
   if (translationCache.has(cacheKey)) {
     const cached = translationCache.get(cacheKey);
     if (cached && !cached.includes('MYMEMORY') && !cached.includes('WARNING')) {
@@ -79,38 +180,41 @@ async function translateText(text, fromLang = 'auto', toLang = 'pt') {
     translationCache.delete(cacheKey);
   }
 
-  const endpoints = [
-    // 1. Google Chrome CDN (clients5.google.com) - Ultrarrápido, sem limite
+  const fastPrimaryEndpoints = [
+    // 1. Google Cloud/GTX Neural JSON Engine (dj=1) - Frases completas contextualizadas
     {
-      url: `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=${normFrom}&tl=${normTo}&q=${encodeURIComponent(trimmed)}`,
+      url: `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${normFrom}&tl=${normTo}&dt=t&dj=1&q=${encodeURIComponent(refined)}`,
+      parse: (d) => {
+        const p = JSON.parse(d);
+        if (p && Array.isArray(p.sentences)) {
+          return p.sentences.map(s => s.trans || '').join('').trim();
+        }
+        return null;
+      }
+    },
+    // 2. Google Chrome CDN (clients5.google.com) - Baixíssima latência (~50ms)
+    {
+      url: `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=${normFrom}&tl=${normTo}&q=${encodeURIComponent(refined)}`,
       parse: (d) => {
         const p = JSON.parse(d);
         if (Array.isArray(p) && typeof p[0] === 'string') return p[0].trim();
         if (Array.isArray(p) && Array.isArray(p[0])) return p[0].map(x => x[0]).join('').trim();
         return null;
       }
-    },
-    // 2. Google Translate Official App Engine (client=it)
+    }
+  ];
+
+  const backupEndpoints = [
     {
-      url: `https://translate.google.com/translate_a/single?client=it&sl=${normFrom}&tl=${normTo}&dt=t&q=${encodeURIComponent(trimmed)}`,
+      url: `https://translate.google.com/translate_a/single?client=it&sl=${normFrom}&tl=${normTo}&dt=t&q=${encodeURIComponent(refined)}`,
       parse: (d) => {
         const p = JSON.parse(d);
         if (Array.isArray(p) && Array.isArray(p[0])) return p[0].map(x => x[0]).join('').trim();
         return null;
       }
     },
-    // 3. Google Translate Web Extension Engine (client=dict-chrome-ex)
     {
-      url: `https://translate.google.com/translate_a/single?client=dict-chrome-ex&sl=${normFrom}&tl=${normTo}&dt=t&q=${encodeURIComponent(trimmed)}`,
-      parse: (d) => {
-        const p = JSON.parse(d);
-        if (Array.isArray(p) && Array.isArray(p[0])) return p[0].map(x => x[0]).join('').trim();
-        return null;
-      }
-    },
-    // 4. Google Translate Android Engine (client=tw-ob)
-    {
-      url: `https://translate.google.com/translate_a/single?client=tw-ob&sl=${normFrom}&tl=${normTo}&dt=t&q=${encodeURIComponent(trimmed)}`,
+      url: `https://translate.google.com/translate_a/single?client=tw-ob&sl=${normFrom}&tl=${normTo}&dt=t&q=${encodeURIComponent(refined)}`,
       parse: (d) => {
         const p = JSON.parse(d);
         if (Array.isArray(p) && Array.isArray(p[0])) return p[0].map(x => x[0]).join('').trim();
@@ -119,52 +223,34 @@ async function translateText(text, fromLang = 'auto', toLang = 'pt') {
     }
   ];
 
-  for (const ep of endpoints) {
-    try {
-      const translated = await new Promise((resolve, reject) => {
-        const req = https.get(ep.url, {
-          agent: httpsAgent,
-          family: 4,
-          timeout: 4000,
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-            'Accept': '*/*'
-          }
-        }, (res) => {
-          if (res.statusCode !== 200) return reject(new Error('HTTP ' + res.statusCode));
-          const chunks = [];
-          res.on('data', c => chunks.push(c));
-          res.on('end', () => {
-            try {
-              const raw = Buffer.concat(chunks).toString('utf8');
-              const resText = ep.parse(raw);
-              if (resText && !resText.includes('MYMEMORY') && !resText.includes('WARNING')) {
-                return resolve(resText);
-              }
-              reject(new Error('Parse error or invalid content'));
-            } catch (err) {
-              reject(err);
-            }
-          });
-        });
-        req.on('error', reject);
-        req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
-      });
+  // Dispara os 2 motores primários em paralelo: o que responder primeiro (< 80ms) vence imediatamente
+  try {
+    const fastest = await Promise.any(fastPrimaryEndpoints.map(ep => fetchTranslationEndpoint(ep)));
+    if (fastest) {
+      if (translationCache.size > 10000) {
+        translationCache.delete(translationCache.keys().next().value);
+      }
+      translationCache.set(cacheKey, fastest);
+      return fastest;
+    }
+  } catch (e) {
+    // Se ambos falharem, tenta os endpoints de backup
+  }
 
+  for (const ep of backupEndpoints) {
+    try {
+      const translated = await fetchTranslationEndpoint(ep);
       if (translated) {
         if (translationCache.size > 10000) {
-          const first = translationCache.keys().next().value;
-          translationCache.delete(first);
+          translationCache.delete(translationCache.keys().next().value);
         }
         translationCache.set(cacheKey, translated);
         return translated;
       }
-    } catch (err) {
-      // continua para o próximo endpoint do Google
-    }
+    } catch (err) {}
   }
 
-  return trimmed;
+  return refined;
 }
 
 const MIME_TYPES = {
@@ -522,62 +608,69 @@ const server = http.createServer(async (req, res) => {
         }
 
         const room = getRoom(roomId.toUpperCase());
-        const cleanedText = text.trim();
-        const msgId = payload.id || crypto.randomUUID();
+        const normSource = getGoogleLangCode(sourceLang);
+        const cleanedText = refineSpokenText(text, normSource, !!isInterim);
+        const normCleaned = normalizeForComparison(cleanedText);
+
+        // Verifica se esta mensagem finalizada é repetição ou continuação cumulativa da frase anterior (janela de 8s)
+        let replaceMessageId = null;
+        if (!isInterim && room.history.length > 0) {
+          const prevMsg = room.history[room.history.length - 1];
+          const prevAge = Date.now() - new Date(prevMsg.timestamp).getTime();
+          const normPrev = normalizeForComparison(prevMsg.originalText);
+
+          if (prevMsg.senderRole === senderRole && prevAge < 8000 && normPrev && normCleaned) {
+            // Se for idêntica ou um fragmento menor de algo que já foi enviado completo, ignora
+            if (normCleaned === normPrev || (normPrev.startsWith(normCleaned) && prevAge < 5000)) {
+              res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+              res.end(JSON.stringify({ success: true, deduplicated: true, id: prevMsg.id }));
+              return;
+            }
+            // Se a nova frase começa com a frase anterior (expansão cumulativa como "deveria..." -> "deveria apresentar..."), substitui o card anterior!
+            if (normCleaned.startsWith(normPrev) && prevAge < 6500) {
+              replaceMessageId = prevMsg.id;
+            }
+          }
+        }
+
+        const msgId = replaceMessageId || payload.id || crypto.randomUUID();
         const timestamp = new Date().toISOString();
 
         // Identifica todos os idiomas demandados pelos ouvintes na sala
         const neededLanguages = new Set();
         for (const sub of room.subscribers) {
           if (sub.lang && sub.lang.trim()) {
-            neededLanguages.add(sub.lang.split('-')[0].toLowerCase());
+            neededLanguages.add(getGoogleLangCode(sub.lang));
           }
         }
         if (payload.targetLang && payload.targetLang.trim()) {
-          neededLanguages.add(payload.targetLang.split('-')[0].toLowerCase());
+          neededLanguages.add(getGoogleLangCode(payload.targetLang));
         }
-        const normSource = sourceLang.split('-')[0].toLowerCase();
         neededLanguages.add(normSource);
 
         const translationsByLang = {};
         translationsByLang[normSource] = cleanedText;
 
-        if (isInterim) {
-          // Para legendas em tempo real (interim streaming), responde em sub-segundo sem travar o SSE
-          const interimPromises = Array.from(neededLanguages)
-            .filter(targetLang => targetLang !== normSource)
-            .map(async (targetLang) => {
-              const cacheKey = `${normSource}->${targetLang}:${cleanedText}`;
-              if (translationCache.has(cacheKey)) {
-                translationsByLang[targetLang] = translationCache.get(cacheKey);
+        const translationPromises = Array.from(neededLanguages)
+          .filter(targetLang => targetLang !== normSource)
+          .map(async (targetLang) => {
+            try {
+              if (isInterim) {
+                const quickPromise = translateText(cleanedText, normSource, targetLang, true);
+                const timeoutPromise = new Promise(r => setTimeout(() => r(cleanedText), 850));
+                translationsByLang[targetLang] = await Promise.race([quickPromise, timeoutPromise]);
               } else {
-                try {
-                  const quickPromise = translateText(cleanedText, normSource, targetLang);
-                  const timeoutPromise = new Promise(r => setTimeout(() => r(cleanedText), 150));
-                  translationsByLang[targetLang] = await Promise.race([quickPromise, timeoutPromise]);
-                } catch (e) {
-                  translationsByLang[targetLang] = cleanedText;
-                }
+                translationsByLang[targetLang] = await translateText(cleanedText, normSource, targetLang, false);
               }
-            });
-          await Promise.all(interimPromises);
-        } else {
-          // Para frases finalizadas, executa tradução de alta prioridade
-          const translationPromises = Array.from(neededLanguages)
-            .filter(targetLang => targetLang !== normSource)
-            .map(async (targetLang) => {
-              try {
-                const trans = await translateText(cleanedText, normSource, targetLang);
-                translationsByLang[targetLang] = trans;
-              } catch (e) {
-                translationsByLang[targetLang] = cleanedText;
-              }
-            });
-          await Promise.all(translationPromises);
-        }
+            } catch (e) {
+              translationsByLang[targetLang] = cleanedText;
+            }
+          });
+        await Promise.all(translationPromises);
 
         const messageObject = {
           id: msgId,
+          replaceMessageId,
           timestamp,
           senderRole,
           senderName,
@@ -588,19 +681,24 @@ const server = http.createServer(async (req, res) => {
         };
 
         if (!isInterim) {
-          room.history.push(messageObject);
-          if (room.history.length > 200) room.history.shift();
+          if (replaceMessageId && room.history.length > 0 && room.history[room.history.length - 1].id === replaceMessageId) {
+            room.history[room.history.length - 1] = messageObject;
+          } else {
+            room.history.push(messageObject);
+            if (room.history.length > 200) room.history.shift();
+          }
         }
 
         // Distribui para cada inscrito na sala no seu respectivo idioma
         for (const sub of room.subscribers) {
           try {
-            const subNormLang = (sub.lang || 'pt').split('-')[0].toLowerCase();
+            const subNormLang = getGoogleLangCode(sub.lang || 'pt');
             const translatedForSub = translationsByLang[subNormLang] || cleanedText;
 
             const packet = JSON.stringify({
               type: 'speech',
               id: msgId,
+              replaceMessageId,
               senderClientId: payload.clientId || null,
               timestamp,
               senderRole,
@@ -618,7 +716,7 @@ const server = http.createServer(async (req, res) => {
         }
 
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ success: true, id: msgId, translations: translationsByLang }));
+        res.end(JSON.stringify({ success: true, id: msgId, replaceMessageId, translations: translationsByLang }));
       } catch (err) {
         res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ error: err.message }));

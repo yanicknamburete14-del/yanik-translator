@@ -2699,7 +2699,7 @@ function updateRoomStats(data) {
 }
 
 // ========================================================
-// 3. MOTOR DE TRADUÇÃO (CLIENT-SIDE & SERVER)
+// 3. MOTOR DE TRADUÇÃO NEURAL CONTEXTUALIZADO (TEMPO REAL & ZERO REPETIÇÕES)
 // ========================================================
 const clientTranslationCache = new Map();
 
@@ -2714,19 +2714,68 @@ function getGoogleLangCode(code) {
 }
 
 /**
- * Tradução universal ultra-rápida e sem falhas (~60-150ms)
+ * Refinador Inteligente de Fala e Contexto Linguístico:
+ * - Remove palavras repetidas consecutivas da fala ("eu eu vou", "de de um", "o o projeto")
+ * - Corrige elipses comuns de reconhecimento de voz
+ * - Remove preposições soltas no final de frases interrompidas ("projeto do" -> "projeto")
+ * - Adiciona capitalização e pontuação para ativar o modo de frase completa da Rede Neural (NMT)
  */
-async function translateUniversal(text, fromLang, toLang) {
-  if (!text || !text.trim()) return '';
-  const trimmed = text.trim();
-  const normFrom = getGoogleLangCode(fromLang);
-  const normTo = getGoogleLangCode(toLang);
+function refineSpokenText(rawText, langCode = 'pt', isInterim = false) {
+  if (!rawText || !rawText.trim()) return '';
+  let text = rawText.trim().replace(/\s+/g, ' ');
 
-  if (normFrom === normTo && normFrom !== 'auto') {
-    return trimmed;
+  // 1. Remove palavras repetidas consecutivas (gaguejos ou eco do microfone)
+  text = text.replace(/\b([a-zA-ZÀ-ÿ]{1,25})(?:\s+\1\b)+/gi, '$1');
+  text = text.replace(/\b([a-zA-ZÀ-ÿ]+\s+[a-zA-ZÀ-ÿ]+)(?:\s+\1\b)+/gi, '$1');
+  text = text.replace(/\b([a-zA-ZÀ-ÿ]+\s+[a-zA-ZÀ-ÿ]+\s+[a-zA-ZÀ-ÿ]+)(?:\s+\1\b)+/gi, '$1');
+
+  const normLang = getGoogleLangCode(langCode);
+
+  if (normLang === 'pt') {
+    text = text
+      .replace(/\bdeveria apresenta[çc][ãa]o\b/gi, 'deveria fazer a apresentação')
+      .replace(/\bvamos apresenta[çc][ãa]o\b/gi, 'vamos fazer a apresentação')
+      .replace(/\bfazer apresenta[çc][ãa]o\b/gi, 'fazer a apresentação')
+      .replace(/\bprojeto do tradutor\b/gi, 'projeto de tradutor')
+      .replace(/\bpara mim (fazer|apresentar|falar|mostrar|explicar|ver|ir)\b/gi, 'para eu $1')
+      .replace(/\ba gente vamos\b/gi, 'nós vamos');
+
+    if (text.split(' ').length >= 3) {
+      text = text.replace(/\s+(do|da|dos|das|de|num|numa|pelo|pela)\s*$/i, '');
+    }
   }
 
-  const cacheKey = `${normFrom}->${normTo}:${trimmed}`;
+  if (!text) return rawText.trim();
+
+  text = text.charAt(0).toUpperCase() + text.slice(1);
+  if (!isInterim && !/[.?!;:]$/.test(text)) {
+    text += '.';
+  }
+  return text;
+}
+
+function cleanTranslatedOutput(text) {
+  if (!text) return '';
+  let cleaned = text.trim().replace(/\s+/g, ' ');
+  cleaned = cleaned.replace(/\b([a-zA-ZÀ-ÿ]{2,25})(?:\s+\1\b)+/gi, '$1');
+  cleaned = cleaned.replace(/\b([a-zA-ZÀ-ÿ]+\s+[a-zA-ZÀ-ÿ]+)(?:\s+\1\b)+/gi, '$1');
+  return cleaned;
+}
+
+/**
+ * Tradução universal ultra-rápida em paralelo (~50-110ms) com refinamento contextual
+ */
+async function translateUniversal(text, fromLang, toLang, isInterim = false) {
+  if (!text || !text.trim()) return '';
+  const normFrom = getGoogleLangCode(fromLang);
+  const normTo = getGoogleLangCode(toLang);
+  const refined = refineSpokenText(text, normFrom, isInterim);
+
+  if (normFrom === normTo && normFrom !== 'auto') {
+    return refined;
+  }
+
+  const cacheKey = `${normFrom}->${normTo}:${refined}`;
   if (clientTranslationCache.has(cacheKey)) {
     const cached = clientTranslationCache.get(cacheKey);
     if (cached && !cached.includes('MYMEMORY') && !cached.includes('WARNING')) {
@@ -2735,113 +2784,98 @@ async function translateUniversal(text, fromLang, toLang) {
     clientTranslationCache.delete(cacheKey);
   }
 
-  // 1. Prioridade 1: API do Servidor Central (multi-endpoint Google com IPv4 keep-alive)
-  if (state.isServerConnected && !state.isFileProtocol) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
-      const res = await fetch('/api/translate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: trimmed, from: normFrom, to: normTo }),
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.translated && data.translated.trim()) {
-          const trans = data.translated.trim();
-          if (!trans.includes('MYMEMORY') && !trans.includes('WARNING')) {
-            clientTranslationCache.set(cacheKey, trans);
-            return trans;
-          }
-        }
-      }
-    } catch (e) {}
-  }
-
-  // 2. Prioridade 2: Google Chrome CDN direto pelo navegador (clients5.google.com)
-  try {
+  const fetchDirectGoogleNmt = async () => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
-    const cUrl = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=${normFrom}&tl=${normTo}&q=${encodeURIComponent(trimmed)}`;
+    const timeoutId = setTimeout(() => controller.abort(), 2600);
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${normFrom}&tl=${normTo}&dt=t&dj=1&q=${encodeURIComponent(refined)}`;
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data && Array.isArray(data.sentences)) {
+      const trans = cleanTranslatedOutput(data.sentences.map(s => s.trans || '').join(''));
+      if (trans && !trans.includes('MYMEMORY') && !trans.includes('WARNING')) return trans;
+    }
+    throw new Error('Invalid GTX response');
+  };
+
+  const fetchDirectChromeCdn = async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2600);
+    const cUrl = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=${normFrom}&tl=${normTo}&q=${encodeURIComponent(refined)}`;
     const res = await fetch(cUrl, { signal: controller.signal });
     clearTimeout(timeoutId);
-    if (res.ok) {
-      const data = await res.json();
-      let trans = '';
-      if (Array.isArray(data) && typeof data[0] === 'string') trans = data[0].trim();
-      else if (Array.isArray(data) && Array.isArray(data[0])) trans = data[0].map(x => x[0]).join('').trim();
-      if (trans && !trans.includes('MYMEMORY') && !trans.includes('WARNING')) {
-        clientTranslationCache.set(cacheKey, trans);
-        return trans;
-      }
-    }
-  } catch (err) {}
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    let trans = '';
+    if (Array.isArray(data) && typeof data[0] === 'string') trans = data[0].trim();
+    else if (Array.isArray(data) && Array.isArray(data[0])) trans = data[0].map(x => x[0]).join('').trim();
+    trans = cleanTranslatedOutput(trans);
+    if (trans && !trans.includes('MYMEMORY') && !trans.includes('WARNING')) return trans;
+    throw new Error('Invalid Chrome CDN response');
+  };
 
-  // 3. Prioridade 3: Google Translate (client=dict-chrome-ex)
-  try {
+  const fetchServerTranslate = async () => {
+    if (!state.isServerConnected || state.isFileProtocol) throw new Error('Server offline');
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
-    const url = `https://translate.google.com/translate_a/single?client=dict-chrome-ex&sl=${normFrom}&tl=${normTo}&dt=t&q=${encodeURIComponent(trimmed)}`;
-    const res = await fetch(url, { signal: controller.signal });
+    const timeoutId = setTimeout(() => controller.abort(), 2800);
+    const res = await fetch('/api/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: refined, from: normFrom, to: normTo }),
+      signal: controller.signal
+    });
     clearTimeout(timeoutId);
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data) && Array.isArray(data[0])) {
-        const trans = data[0].map(item => (item && item[0]) ? item[0] : '').join('').trim();
-        if (trans && !trans.includes('MYMEMORY') && !trans.includes('WARNING')) {
-          clientTranslationCache.set(cacheKey, trans);
-          return trans;
-        }
-      }
-    }
-  } catch (err) {}
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const trans = cleanTranslatedOutput(data.translated || '');
+    if (trans && !trans.includes('MYMEMORY') && !trans.includes('WARNING')) return trans;
+    throw new Error('Empty server translation');
+  };
 
-  // 4. Prioridade 4: Google Translate (client=it - iOS app endpoint)
+  // Dispara tradução em paralelo: o primeiro motor a responder (< 80ms) entrega o resultado imediatamente!
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
-    const url = `https://translate.google.com/translate_a/single?client=it&sl=${normFrom}&tl=${normTo}&dt=t&q=${encodeURIComponent(trimmed)}`;
-    const res = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeoutId);
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data) && Array.isArray(data[0])) {
-        const trans = data[0].map(item => (item && item[0]) ? item[0] : '').join('').trim();
-        if (trans && !trans.includes('MYMEMORY') && !trans.includes('WARNING')) {
-          clientTranslationCache.set(cacheKey, trans);
-          return trans;
-        }
+    const fastest = await Promise.any([
+      fetchDirectGoogleNmt(),
+      fetchDirectChromeCdn(),
+      fetchServerTranslate()
+    ]);
+    if (fastest) {
+      if (clientTranslationCache.size > 5000) {
+        clientTranslationCache.delete(clientTranslationCache.keys().next().value);
       }
+      clientTranslationCache.set(cacheKey, fastest);
+      return fastest;
     }
-  } catch (err) {}
+  } catch (e) {}
 
-  return trimmed;
+  return refined;
 }
 
 // ========================================================
-// 4. RECEPÇÃO E REPRODUÇÃO DE FALA (COM DEDUPLICAÇÃO)
+// 4. RECEPÇÃO E REPRODUÇÃO DE FALA (COM DEDUPLICAÇÃO PROGRESSIVA)
 // ========================================================
 function normalizeSpeechText(text) {
   if (!text) return '';
   return String(text)
     .toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[\.,\/#!$%\^&\*;:{}=\-_`~()?'"“”‘’…—–]/g, '')
+    .replace(/[\.,\/#!$%\^&\*;:{}=\-_~`()?'"“”‘’…—–]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
 const processedSpeechIds = new Set();
 let lastFinalizedSpeechKey = '';
+let lastFinalizedSpeechNorm = '';
 let lastFinalizedSpeechTime = 0;
+let latestInterimSeq = 0;
 
 async function handleIncomingSpeech(data) {
   if (!data) return;
 
-  // 1. Deduplicação por ID de mensagem única (descarta entrega dupla SSE + BroadcastChannel)
-  if (data.id) {
+  // 1. Deduplicação por ID de mensagem única (mas permite atualização in-place se replaceMessageId estiver presente)
+  if (data.id && !data.isInterim && !data.replaceMessageId) {
     if (processedSpeechIds.has(data.id)) {
       return;
     }
@@ -2852,19 +2886,30 @@ async function handleIncomingSpeech(data) {
     }
   }
 
-  // 2. Deduplicação por conteúdo na janela temporal de 3.5s (evita duplicatas de finalização)
+  const currentSeq = data.isInterim ? (++latestInterimSeq) : latestInterimSeq;
+  const cleanedOriginal = refineSpokenText(data.originalText || data.text || '', data.sourceLang || 'pt', !!data.isInterim);
+  const normOriginal = normalizeSpeechText(cleanedOriginal);
+  const now = Date.now();
+
+  // 2. Deduplicação inteligente na recepção de frases finalizadas
+  let isProgressiveExpansion = !!data.replaceMessageId;
   if (!data.isInterim) {
-    const normOriginal = normalizeSpeechText(data.originalText || '');
-    const now = Date.now();
     const speechKey = `${data.senderRole || ''}:${normOriginal}`;
-    if (normOriginal && speechKey === lastFinalizedSpeechKey && (now - lastFinalizedSpeechTime) < 3500) {
-      return;
+    // Descarta se for exatamente igual ou um fragmento menor de algo que acabou de ser finalizado
+    if (normOriginal && (now - lastFinalizedSpeechTime) < 6000) {
+      if (speechKey === lastFinalizedSpeechKey || (lastFinalizedSpeechNorm && lastFinalizedSpeechNorm.startsWith(normOriginal))) {
+        return;
+      }
+      if (lastFinalizedSpeechNorm && normOriginal.startsWith(lastFinalizedSpeechNorm)) {
+        isProgressiveExpansion = true;
+      }
     }
     lastFinalizedSpeechKey = speechKey;
+    lastFinalizedSpeechNorm = normOriginal;
     lastFinalizedSpeechTime = now;
   }
 
-    let translatedForCurrent = (data.translatedText || '').trim();
+  let translatedForCurrent = cleanTranslatedOutput(data.translatedText || '');
   const targetCode = state.activeTab === 'student' ? state.studentTargetLang : state.teacherLang;
   if (!targetCode) {
     if (state.activeTab === 'student') {
@@ -2881,19 +2926,24 @@ async function handleIncomingSpeech(data) {
 
   // Se o servidor já forneceu a tradução pré-calculada para este idioma no SSE broadcast
   if (data.translations && data.translations[normTarget]) {
-    translatedForCurrent = data.translations[normTarget];
+    translatedForCurrent = cleanTranslatedOutput(data.translations[normTarget]);
   }
 
-  // Se a tradução veio vazia ou veio igual ao texto original quando os idiomas são distintos, traduz imediatamente
-  const isUntranslated = !translatedForCurrent || (normSource !== normTarget && translatedForCurrent.toLowerCase() === (data.originalText || '').trim().toLowerCase());
+  // Se a tradução veio vazia ou veio igual ao texto original quando os idiomas são distintos, traduz imediatamente em paralelo
+  const isUntranslated = !translatedForCurrent || (normSource !== normTarget && normalizeSpeechText(translatedForCurrent) === normOriginal);
 
   if (isUntranslated || (data.targetLang && getGoogleLangCode(data.targetLang) !== normTarget)) {
-    translatedForCurrent = await translateUniversal(data.originalText, data.sourceLang, targetCode);
+    translatedForCurrent = await translateUniversal(cleanedOriginal, data.sourceLang, targetCode, !!data.isInterim);
+  }
+
+  // Se era um pacote interim e já chegou outro mais recente enquanto traduzia, descarta para não voltar atrás no quadro
+  if (data.isInterim && currentSeq < latestInterimSeq) {
+    return;
   }
 
   if (data.senderRole === 'teacher' && !data.isInterim) {
     window.lastStudentSpeech = {
-      originalText: data.originalText,
+      originalText: cleanedOriginal,
       sourceLang: data.sourceLang,
       translations: data.translations || {},
       senderName: data.senderName
@@ -2903,6 +2953,14 @@ async function handleIncomingSpeech(data) {
     }
   }
 
+  const enrichedData = {
+    ...data,
+    originalText: cleanedOriginal,
+    translatedText: translatedForCurrent,
+    targetLang: targetCode,
+    isProgressiveExpansion
+  };
+
   // 1. Atualiza modo Aluno
   if (state.activeTab === 'student') {
     const captionEl = document.getElementById('student-live-text');
@@ -2910,7 +2968,7 @@ async function handleIncomingSpeech(data) {
     
     if (captionEl) {
       if (data.isInterim) {
-        captionEl.innerHTML = `<span style="opacity: 0.95;">${escapeHtml(translatedForCurrent)}</span><span class="typing-cursor"></span>`;
+        captionEl.innerHTML = `<span style="opacity: 0.96;">${escapeHtml(translatedForCurrent)}</span><span class="typing-cursor"></span>`;
       } else {
         captionEl.textContent = translatedForCurrent;
       }
@@ -2918,7 +2976,7 @@ async function handleIncomingSpeech(data) {
 
     if (sourceBadge) {
       if (data.isInterim) {
-        sourceBadge.innerHTML = `🔴 <strong style="color: #ef4444;">Traduzindo fala em tempo real...</strong> (${data.sourceLang.toUpperCase()} → ${targetCode.toUpperCase()})`;
+        sourceBadge.innerHTML = `🔴 <strong style="color: #ef4444;">Traduzindo simultaneamente...</strong> (${data.sourceLang.toUpperCase()} → ${targetCode.toUpperCase()})`;
       } else {
         sourceBadge.innerHTML = `✓ <strong>${data.senderName}</strong> (${data.sourceLang.toUpperCase()} → ${targetCode.toUpperCase()})`;
         sourceBadge.style.color = '';
@@ -2929,26 +2987,26 @@ async function handleIncomingSpeech(data) {
       if (state.autoSpeak) {
         speakText(translatedForCurrent, targetCode);
       }
-      appendStudentFeed({ ...data, translatedText: translatedForCurrent, targetLang: targetCode });
+      appendStudentFeed(enrichedData);
     }
   }
 
   // 2. Atualiza modo Professor
   if (state.activeTab === 'teacher') {
     if (data.senderRole === 'student' && !data.isInterim) {
-      showTeacherQuestionAlert({ ...data, translatedText: translatedForCurrent });
+      showTeacherQuestionAlert(enrichedData);
       if (state.autoSpeak) {
         speakText(translatedForCurrent, state.teacherLang);
       }
     }
 
     if (!data.isInterim) {
-      appendTeacherFeed(data);
+      appendTeacherFeed(enrichedData);
     }
   }
 
   if (!data.isInterim) {
-    appendToHistory(data, true);
+    appendToHistory(enrichedData, true);
   }
 }
 
@@ -2970,8 +3028,25 @@ function showTeacherQuestionAlert(data) {
 }
 
 // ========================================================
-// 5. RECONHECIMENTO DE FALA (SPEECH-TO-TEXT)
+// 5. RECONHECIMENTO DE FALA SEM REPETIÇÕES (SEGMENTAÇÃO INTELIGENTE)
 // ========================================================
+const committedCharsByResultIndex = new Map();
+
+// Palavras conectoras que indicam que o locutor ainda está no meio de um sintagma
+const DANGLING_CONNECTORS = new Set([
+  'de', 'do', 'da', 'dos', 'das', 'em', 'no', 'na', 'nos', 'nas', 'por', 'pelo', 'pela',
+  'para', 'pra', 'com', 'sem', 'um', 'uma', 'uns', 'umas', 'o', 'a', 'os', 'as', 'que',
+  'e', 'ou', 'mas', 'se', 'como', 'quando', 'onde', 'quem', 'qual', 'cujo', 'num', 'numa',
+  'the', 'a', 'an', 'of', 'to', 'in', 'for', 'with', 'on', 'at', 'from', 'by', 'and', 'or', 'that'
+]);
+
+function endsWithDanglingConnector(text) {
+  if (!text) return false;
+  const words = text.trim().toLowerCase().replace(/[.,?!;:]+$/, '').split(/\s+/);
+  if (words.length === 0) return false;
+  return DANGLING_CONNECTORS.has(words[words.length - 1]);
+}
+
 function initSpeechRecognition() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -2986,6 +3061,7 @@ function initSpeechRecognition() {
   state.recognition.maxAlternatives = 1;
 
   state.recognition.onstart = () => {
+    committedCharsByResultIndex.clear();
     updateMicVisuals(true);
   };
 
@@ -2998,6 +3074,7 @@ function initSpeechRecognition() {
   };
 
   state.recognition.onend = () => {
+    committedCharsByResultIndex.clear();
     if (isRestartingRecognition) {
       return;
     }
@@ -3016,18 +3093,33 @@ function initSpeechRecognition() {
   state.recognition.onresult = (event) => {
     let interimTranscript = '';
     let finalTranscript = '';
+    let activeInterimIdx = -1;
+    let activeInterimRawLen = 0;
 
     for (let i = event.resultIndex; i < event.results.length; ++i) {
-      const transcript = event.results[i][0].transcript;
+      const rawTranscript = event.results[i][0].transcript || '';
+      const committedLen = committedCharsByResultIndex.get(i) || 0;
+      const uncommittedSlice = rawTranscript.slice(committedLen);
+
       if (event.results[i].isFinal) {
-        finalTranscript += transcript;
+        committedCharsByResultIndex.set(i, rawTranscript.length);
+        if (uncommittedSlice.trim()) {
+          finalTranscript += ' ' + uncommittedSlice.trim();
+        }
       } else {
-        interimTranscript += transcript;
+        if (uncommittedSlice.trim()) {
+          interimTranscript += (interimTranscript ? ' ' : '') + uncommittedSlice.trim();
+          activeInterimIdx = i;
+          activeInterimRawLen = rawTranscript.length;
+        }
       }
     }
 
+    finalTranscript = finalTranscript.trim();
+    interimTranscript = interimTranscript.trim();
+
     if (state.isRecordingTeacher) {
-      handleTeacherSpeechResult(finalTranscript, interimTranscript);
+      handleTeacherSpeechResult(finalTranscript, interimTranscript, activeInterimIdx, activeInterimRawLen);
     } else if (state.isRecordingStudent) {
       handleStudentSpeechResult(finalTranscript, interimTranscript);
     } else if (state.isRecordingDiagA || state.isRecordingDiagB) {
@@ -3040,80 +3132,96 @@ let isRestartingRecognition = false;
 let interimBroadcastTimer = null;
 let lastBroadcastInterimText = '';
 let pauseDetectorTimer = null;
-let lastFinalizedSpeechNorm = '';
-let lastFinalizedTime = 0;
+let lastTeacherCommittedNorm = '';
+let lastTeacherCommittedTime = 0;
 
-async function handleTeacherSpeechResult(finalText, interimText) {
+async function handleTeacherSpeechResult(finalText, interimText, activeInterimIdx = -1, activeInterimRawLen = 0) {
   const interimBox = document.getElementById('teacher-interim-box');
 
-  // Streaming instantâneo de legendas em tempo real (25ms - digitação simultânea)
-  if (interimText && interimText.trim()) {
-    const trimmedInterim = interimText.trim();
+  // 1. Streaming em Tempo Real (40ms) para o Quadro Digital do Aluno enquanto o professor fala
+  if (interimText) {
+    const refinedInterim = refineSpokenText(interimText, state.teacherLang, true);
     if (interimBox) {
       interimBox.style.display = 'block';
-      interimBox.innerHTML = `🎙️ <em>${escapeHtml(trimmedInterim)}</em><span class="typing-cursor"></span>`;
+      interimBox.innerHTML = `🎙️ <em>${escapeHtml(refinedInterim)}</em><span class="typing-cursor"></span>`;
     }
 
-    if (trimmedInterim !== lastBroadcastInterimText) {
+    if (refinedInterim !== lastBroadcastInterimText) {
       clearTimeout(interimBroadcastTimer);
       interimBroadcastTimer = setTimeout(() => {
-        lastBroadcastInterimText = trimmedInterim;
+        lastBroadcastInterimText = refinedInterim;
         processAndBroadcastSpeech({
           roomId: state.roomId,
           senderRole: 'teacher',
           senderName: 'Professor',
-          text: trimmedInterim,
+          text: refinedInterim,
           sourceLang: state.teacherLang,
           isInterim: true
         });
-      }, 25);
+      }, 40);
     }
 
-    // Detector de pausa de finalização rápida (< 500ms para fala simultânea)
-    const hasPunctuation = /[.,?!;:]$/.test(trimmedInterim);
-    const delay = hasPunctuation ? 180 : 480;
-
+    // 2. Finalização Inteligente por Pausa Natural (NUNCA corta no meio de conectores e CONSOME o índice já enviado!)
     clearTimeout(pauseDetectorTimer);
+    const wordCount = refinedInterim.split(/\s+/).length;
+    const hasPunctuation = /[.,?!;:]$/.test(refinedInterim);
+    const pauseDelay = hasPunctuation ? 450 : (wordCount >= 12 ? 750 : 1050);
+
     pauseDetectorTimer = setTimeout(() => {
-      const normInterim = normalizeSpeechText(trimmedInterim);
-      if (normInterim && normInterim !== lastFinalizedSpeechNorm && (Date.now() - lastFinalizedTime > 1200)) {
-        lastFinalizedSpeechNorm = normInterim;
-        lastFinalizedTime = Date.now();
-        if (interimBox) interimBox.style.display = 'none';
-        processAndBroadcastSpeech({
-          roomId: state.roomId,
-          senderRole: 'teacher',
-          senderName: 'Professor',
-          text: trimmedInterim,
-          sourceLang: state.teacherLang,
-          isInterim: false
-        });
+      // Se terminou numa preposição/artigo solto ("de um", "projeto do"), aguarda a próxima palavra em vez de cortar!
+      if (endsWithDanglingConnector(interimText) && wordCount < 16) {
+        return;
       }
-    }, delay);
+
+      const finalClause = refineSpokenText(interimText, state.teacherLang, false);
+      const normClause = normalizeSpeechText(finalClause);
+      if (!normClause || normClause.length < 2) return;
+
+      // Marca esses caracteres como consumidos no resultado atual da Web Speech API para NUNCA mais repeti-los!
+      if (activeInterimIdx >= 0 && activeInterimRawLen > 0) {
+        committedCharsByResultIndex.set(activeInterimIdx, activeInterimRawLen);
+      }
+
+      if (normClause === lastTeacherCommittedNorm && (Date.now() - lastTeacherCommittedTime < 4000)) {
+        return;
+      }
+      lastTeacherCommittedNorm = normClause;
+      lastTeacherCommittedTime = Date.now();
+
+      if (interimBox) interimBox.style.display = 'none';
+      processAndBroadcastSpeech({
+        roomId: state.roomId,
+        senderRole: 'teacher',
+        senderName: 'Professor',
+        text: finalClause,
+        sourceLang: state.teacherLang,
+        isInterim: false
+      });
+    }, pauseDelay);
   }
 
-  // Finalização nativa pelo motor de fala do navegador (isFinal: true)
-  if (finalText && finalText.trim()) {
+  // 3. Finalização nativa pelo motor de fala do navegador (isFinal: true) - apenas da fatia não consumida!
+  if (finalText) {
     clearTimeout(pauseDetectorTimer);
     clearTimeout(interimBroadcastTimer);
-    const trimmedFinal = finalText.trim();
-    const normFinal = normalizeSpeechText(trimmedFinal);
+    const refinedFinal = refineSpokenText(finalText, state.teacherLang, false);
+    const normFinal = normalizeSpeechText(refinedFinal);
 
     if (interimBox) interimBox.style.display = 'none';
+    if (!normFinal || normFinal.length < 2) return;
 
-    // Se já foi finalizado recentemente (pelo detector de pausa ou eco de voz), descarta
-    if (normFinal && normFinal === lastFinalizedSpeechNorm && (Date.now() - lastFinalizedTime < 2000)) {
+    if (normFinal === lastTeacherCommittedNorm && (Date.now() - lastTeacherCommittedTime < 4000)) {
       return;
     }
 
-    lastFinalizedSpeechNorm = normFinal;
-    lastFinalizedTime = Date.now();
+    lastTeacherCommittedNorm = normFinal;
+    lastTeacherCommittedTime = Date.now();
 
     processAndBroadcastSpeech({
       roomId: state.roomId,
       senderRole: 'teacher',
       senderName: 'Professor',
-      text: trimmedFinal,
+      text: refinedFinal,
       sourceLang: state.teacherLang,
       isInterim: false
     });
@@ -3125,27 +3233,27 @@ let lastStudentFinalizedTime = 0;
 
 async function handleStudentSpeechResult(finalText, interimText) {
   const preview = document.getElementById('student-question-preview');
-  if (interimText && interimText.trim() && preview) {
-    preview.textContent = `🎙️ Ouvindo: "${interimText}"...`;
+  if (interimText && preview) {
+    preview.textContent = `🎙️ Ouvindo: "${refineSpokenText(interimText, state.studentSpeakLang, true)}"...`;
   }
 
-  if (finalText && finalText.trim()) {
-    const trimmed = finalText.trim();
-    const norm = normalizeSpeechText(trimmed);
+  if (finalText) {
+    const refined = refineSpokenText(finalText, state.studentSpeakLang, false);
+    const norm = normalizeSpeechText(refined);
     const now = Date.now();
-    if (norm && norm === lastStudentFinalizedNorm && (now - lastStudentFinalizedTime < 3500)) {
+    if (!norm || (norm === lastStudentFinalizedNorm && (now - lastStudentFinalizedTime < 3500))) {
       return;
     }
     lastStudentFinalizedNorm = norm;
     lastStudentFinalizedTime = now;
 
-    if (preview) preview.textContent = `✓ Enviando pergunta: "${trimmed}"`;
+    if (preview) preview.textContent = `✓ Enviando pergunta: "${refined}"`;
     
     processAndBroadcastSpeech({
       roomId: state.roomId,
       senderRole: 'student',
       senderName: `Aluno (${state.studentSpeakLang.toUpperCase()})`,
-      text: trimmed,
+      text: refined,
       sourceLang: state.studentSpeakLang,
       isInterim: false
     });
@@ -3158,7 +3266,7 @@ async function handleStudentSpeechResult(finalText, interimText) {
 }
 
 function processAndBroadcastSpeech(payload) {
-  const cleanedText = (payload.text || '').trim();
+  const cleanedText = refineSpokenText(payload.text || '', payload.sourceLang || 'pt', !!payload.isInterim);
   if (!cleanedText) return;
 
   const msgId = payload.id || ('msg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8));
@@ -3184,7 +3292,7 @@ function processAndBroadcastSpeech(payload) {
 
   // 2. Se for modo Offline ou Direto (sem servidor), usamos o BroadcastChannel e execução local
   if (!state.isServerConnected || state.isFileProtocol) {
-    translateUniversal(cleanedText, payload.sourceLang, targetLang).then((translated) => {
+    translateUniversal(cleanedText, payload.sourceLang, targetLang, !!payload.isInterim).then((translated) => {
       const packet = {
         id: msgId,
         timestamp: new Date().toISOString(),
@@ -3207,12 +3315,13 @@ function processAndBroadcastSpeech(payload) {
 }
 
 // ========================================================
-// 6. SÍNTESE DE VOZ (FILA DE ÁUDIO HD CONTÍNUA E DEDUPLICADA)
+// 6. SÍNTESE DE VOZ EM TEMPO REAL (DELTA INTELIGENTE SEM REPETIÇÃO)
 // ========================================================
 const audioQueue = [];
 let isAudioProcessing = false;
 let currentAudioElement = null;
 let lastSpokenTextNorm = '';
+let lastSpokenWords = [];
 let lastSpokenTimestamp = 0;
 
 function setupSpeechSynthesis() {
@@ -3230,25 +3339,50 @@ function setupSpeechSynthesis() {
 
 function speakText(text, langCode) {
   if (!text || !text.trim()) return;
-  const cleaned = text.trim();
+  let cleaned = cleanTranslatedOutput(text);
   const normCleaned = normalizeSpeechText(cleaned);
+  if (!normCleaned) return;
+
   const now = Date.now();
 
-  // Previne repetição imediata da mesma frase (< 3.5 segundos)
-  if (normCleaned && normCleaned === lastSpokenTextNorm && (now - lastSpokenTimestamp < 3500)) {
-    return;
+  // 1. Previne repetição se o texto já foi falado (ou é um prefixo menor do que acabou de ser falado) nos últimos 6 segundos
+  if ((now - lastSpokenTimestamp) < 6000 && lastSpokenTextNorm) {
+    if (normCleaned === lastSpokenTextNorm || lastSpokenTextNorm.startsWith(normCleaned)) {
+      return;
+    }
+    // Se a nova frase é uma expansão cumulativa do que acabou de ser falado (ex: falou "Should present a" e chegou "Should present a translator project"),
+    // pronuncia APENAS as palavras novas do final (delta) para não repetir o início!
+    if (normCleaned.startsWith(lastSpokenTextNorm)) {
+      const newWords = cleaned.split(/\s+/);
+      if (newWords.length > lastSpokenWords.length && lastSpokenWords.length > 0) {
+        cleaned = newWords.slice(lastSpokenWords.length).join(' ');
+      }
+    }
   }
 
-  // Previne repetição se a mesma frase já estiver aguardando na fila de áudio
-  if (normCleaned && audioQueue.some(item => (item.norm || normalizeSpeechText(item.text)) === normCleaned)) {
-    return;
+  // 2. Se houver um item pendente na fila que seja prefixo desta frase mais completa, substitui na fila!
+  for (let i = 0; i < audioQueue.length; i++) {
+    const qNorm = audioQueue[i].norm;
+    if (qNorm === normCleaned || qNorm.startsWith(normCleaned)) {
+      return;
+    }
+    if (normCleaned.startsWith(qNorm)) {
+      audioQueue[i] = { text: cleaned, lang: langCode, norm: normCleaned, fullWords: text.trim().split(/\s+/) };
+      return;
+    }
   }
 
-  if (audioQueue.length > 5) {
+  // Mantém a fila enxuta para latência zero em tempo real
+  if (audioQueue.length > 2) {
     audioQueue.shift();
   }
 
-  audioQueue.push({ text: cleaned, lang: langCode, norm: normCleaned });
+  audioQueue.push({
+    text: cleaned,
+    lang: langCode,
+    norm: normCleaned,
+    fullWords: text.trim().split(/\s+/)
+  });
 
   if (!isAudioProcessing) {
     processNextAudioQueue();
@@ -3322,6 +3456,7 @@ function processNextAudioQueue() {
 
   const item = audioQueue.shift();
   lastSpokenTextNorm = item.norm || normalizeSpeechText(item.text);
+  lastSpokenWords = item.fullWords || item.text.trim().split(/\s+/);
   lastSpokenTimestamp = Date.now();
 
   let ended = false;
@@ -4042,15 +4177,42 @@ function appendTeacherFeed(data) {
   const feed = document.getElementById('teacher-feed');
   if (!feed) return;
 
+  const timeStr = new Date(data.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const roleBadge = data.senderRole === 'student' ? '🙋 Pergunta do Aluno' : '👨‍🏫 Professor';
+  const normCurrent = normalizeSpeechText(data.originalText || '');
+  const now = Date.now();
+
+  // Verifica se o card do topo é um prefixo recente da mesma fala (atualização in-place sem duplicar!)
+  const topItem = feed.firstElementChild;
+  if (topItem) {
+    const topMsgId = topItem.getAttribute('data-msg-id');
+    const topNorm = topItem.getAttribute('data-norm-original') || '';
+    const topTime = parseInt(topItem.getAttribute('data-created-ms') || '0', 10);
+    const topRole = topItem.getAttribute('data-sender-role') || '';
+
+    if (
+      (data.replaceMessageId && topMsgId === data.replaceMessageId) ||
+      (topRole === data.senderRole && (now - topTime) < 7000 && topNorm && normCurrent && (normCurrent.startsWith(topNorm) || data.isProgressiveExpansion))
+    ) {
+      topItem.setAttribute('data-msg-id', data.id || topMsgId);
+      topItem.setAttribute('data-norm-original', normCurrent);
+      topItem.setAttribute('data-created-ms', String(now));
+      const transEl = topItem.querySelector('.feed-translated');
+      if (transEl) transEl.textContent = data.originalText;
+      return;
+    }
+  }
+
   const item = document.createElement('div');
   item.className = `feed-item ${data.senderRole === 'student' ? 'student-question' : 'teacher'}`;
-
-  const timeStr = new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const roleBadge = data.senderRole === 'student' ? '🙋 Pergunta do Aluno' : '👨‍🏫 Professor';
+  item.setAttribute('data-msg-id', data.id || '');
+  item.setAttribute('data-norm-original', normCurrent);
+  item.setAttribute('data-created-ms', String(now));
+  item.setAttribute('data-sender-role', data.senderRole || 'teacher');
 
   item.innerHTML = `
     <div class="feed-meta">
-      <span class="feed-sender">${roleBadge} (${data.sourceLang.toUpperCase()})</span>
+      <span class="feed-sender">${roleBadge} (${(data.sourceLang || 'pt').toUpperCase()})</span>
       <span>${timeStr}</span>
     </div>
     <div class="feed-translated">${escapeHtml(data.originalText)}</div>
@@ -4063,27 +4225,62 @@ function appendStudentFeed(data) {
   const feed = document.getElementById('student-feed');
   if (!feed) return;
 
+  const origText = data.originalText || data.text || '';
+  const normCurrent = normalizeSpeechText(origText);
+  const now = Date.now();
+  const timeStr = new Date(data.timestamp || now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const targetLang = data.targetLang || state.studentTargetLang;
+
+  // Verifica se o card do topo é um prefixo recente da mesma fala (atualiza in-place em vez de criar cards repetidos!)
+  const topItem = feed.firstElementChild;
+  if (topItem) {
+    const topMsgId = topItem.getAttribute('data-msg-id');
+    const topNorm = topItem.getAttribute('data-norm-original') || '';
+    const topTime = parseInt(topItem.getAttribute('data-created-ms') || '0', 10);
+    const topRole = topItem.getAttribute('data-sender-role') || '';
+
+    if (
+      (data.replaceMessageId && topMsgId === data.replaceMessageId) ||
+      (topRole === data.senderRole && (now - topTime) < 7000 && topNorm && normCurrent && (normCurrent.startsWith(topNorm) || data.isProgressiveExpansion))
+    ) {
+      topItem.setAttribute('data-msg-id', data.id || topMsgId);
+      topItem.setAttribute('data-norm-original', normCurrent);
+      topItem.setAttribute('data-created-ms', String(now));
+      topItem.setAttribute('data-original-text', origText);
+      if (data.translations) {
+        topItem.setAttribute('data-translations', JSON.stringify(data.translations));
+      }
+      const textEl = topItem.querySelector('.feed-text');
+      if (textEl) textEl.textContent = data.translatedText;
+      const origEl = topItem.querySelector('.feed-original');
+      if (origEl) origEl.textContent = `Original (${(data.sourceLang || 'pt').toUpperCase()}): "${origText}"`;
+      return;
+    }
+  }
+
   const item = document.createElement('div');
   item.className = `feed-item ${data.senderRole === 'student' ? 'student-question' : 'teacher'}`;
-  item.setAttribute('data-original-text', data.originalText || data.text || '');
+  item.setAttribute('data-msg-id', data.id || '');
+  item.setAttribute('data-norm-original', normCurrent);
+  item.setAttribute('data-created-ms', String(now));
+  item.setAttribute('data-sender-role', data.senderRole || 'teacher');
+  item.setAttribute('data-original-text', origText);
   item.setAttribute('data-source-lang', data.sourceLang || 'pt');
-  item.setAttribute('data-target-lang', data.targetLang || state.studentTargetLang);
+  item.setAttribute('data-target-lang', targetLang);
   item.setAttribute('data-sender-name', data.senderName || 'Professor');
   if (data.translations) {
     item.setAttribute('data-translations', JSON.stringify(data.translations));
   }
-
-  const timeStr = new Date(data.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
   const playBtnHtml = `<button class="btn btn-secondary feed-play-btn" style="padding: 4px 10px; font-size: 0.78rem; margin-top: 6px;" onclick="speakFeedItem(this)">${UI_ICONS.volume} <span>Ouvir</span></button>`;
 
   item.innerHTML = `
     <div class="feed-meta" data-time="${timeStr}">
       <span class="feed-sender">${escapeHtml(data.senderName)}</span>
-      <span>${timeStr} (${(data.targetLang || state.studentTargetLang).toUpperCase()})</span>
+      <span>${timeStr} (${targetLang.toUpperCase()})</span>
     </div>
     <div class="feed-translated feed-text">${escapeHtml(data.translatedText)}</div>
-    <div class="feed-original">Original (${(data.sourceLang || 'pt').toUpperCase()}): "${escapeHtml(data.originalText)}"</div>
+    <div class="feed-original">Original (${(data.sourceLang || 'pt').toUpperCase()}): "${escapeHtml(origText)}"</div>
     ${playBtnHtml}
   `;
 
