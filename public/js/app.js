@@ -2009,7 +2009,8 @@ const state = {
 // ========================================================
 // 1. INICIALIZAÇÃO
 // ========================================================
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
+  // 1. Inicializa imediatamente toda a interface, seletores e escutas de eventos (0ms, instantâneo)
   setupBroadcastChannel();
   parseUrlParams();
   setupLanguageSelectors();
@@ -2019,30 +2020,29 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupSpeechSynthesis();
   initSpeechRecognition();
   setupInitialLanguageModal();
-  
-  // Carrega informações do servidor; se falhar, ativa modo autônomo sem travar
-  await loadServerInfo();
-  await fetchAvailableRooms();
-  updateRoomDisplay();
-  connectRealtime();
-  
   setupEventListeners();
+  updateRoomDisplay();
+  renderShareLinks();
   renderQrCode();
   initClassSummarizer();
 
-  // Atualização periódica da lista de salas da escola a cada 5 segundos
+  // 2. Conecta ao servidor e carrega salas em segundo plano (sem travar botões ou renderização)
+  loadServerInfo();
+  fetchAvailableRooms();
+
+  // 3. Atualização periódica da lista de salas da escola a cada 5 segundos
   setInterval(() => {
     fetchAvailableRooms();
   }, 5000);
 
-  // Desbloqueia áudio no primeiro toque na tela
+  // 4. Desbloqueia áudio no primeiro toque na tela
   document.addEventListener('click', () => {
     if (!state.audioUnlocked) {
       unlockMobileAudio(false);
     }
   }, { once: true });
 
-  // Solicita explicitamente a seleção de idioma inicial se não tiver sido escolhido
+  // 5. Solicita explicitamente a seleção de idioma inicial se não tiver sido escolhido
   setTimeout(() => {
     if (state.activeTab === 'teacher' && !state.teacherLang) {
       openInitialLanguageModal('teacher');
@@ -2158,7 +2158,7 @@ function applyUiLanguage(langCode) {
 
   // 7. Atualiza opções de velocidade de fala
   const speedSelect = document.getElementById('speech-rate-select');
-  if (speedSelect && speedSelect.options.length >= 3) {
+  if (speedSelect && speedSelect.options && speedSelect.options.length >= 3) {
     speedSelect.options[0].textContent = t.student_speed_slow || '0.85x (Lento)';
     speedSelect.options[1].textContent = t.student_speed_normal || '1.0x (Normal)';
     speedSelect.options[2].textContent = t.student_speed_fast || '1.15x (Rápido)';
@@ -3194,8 +3194,8 @@ function setupSpeechSynthesis() {
   };
 
   loadVoices();
-  if (speechSynthesis.onvoiceschanged !== undefined) {
-    speechSynthesis.onvoiceschanged = loadVoices;
+  if (window.speechSynthesis && window.speechSynthesis.onvoiceschanged !== undefined) {
+    window.speechSynthesis.onvoiceschanged = loadVoices;
   }
 }
 
@@ -3564,12 +3564,13 @@ function setupEventListeners() {
     const sendManual = () => {
       const val = manualInput.value.trim();
       if (val) {
+        const lang = state.teacherLang || 'pt';
         processAndBroadcastSpeech({
           roomId: state.roomId,
           senderRole: 'teacher',
           senderName: 'Professor',
           text: val,
-          sourceLang: state.teacherLang,
+          sourceLang: lang,
           isInterim: false
         });
         manualInput.value = '';
@@ -3630,14 +3631,9 @@ function setupEventListeners() {
     btnChangeRoom.addEventListener('click', () => {
       const roomInput = document.getElementById('room-id-input');
       if (roomInput && roomInput.value.trim()) {
-        state.roomId = roomInput.value.trim().toUpperCase();
-        const headerRoomBadge = document.getElementById('header-room-badge');
-        const t = UI_TRANSLATIONS[state.uiLang] || UI_TRANSLATIONS['pt'];
-        if (headerRoomBadge) headerRoomBadge.textContent = `${t.nav_room_prefix || 'Sala: '}${state.roomId}`;
-        setupBroadcastChannel();
-        connectRealtime();
-        renderQrCode();
-        renderShareLinks();
+        const newRoom = roomInput.value.trim().toUpperCase();
+        joinRoom(newRoom);
+        showToast('✓ Conectado à sala ' + newRoom + '!', 'success');
       }
     });
   }
@@ -3896,27 +3892,27 @@ function updateStudentLanguageOnServer(newLang) {
 // ========================================================
 function getStudentJoinUrl() {
   const uiParam = state.uiLang && state.uiLang !== 'pt' ? `&uiLang=${encodeURIComponent(state.uiLang)}` : '';
-  const langParam = encodeURIComponent(state.studentTargetLang || '');
+  const langParam = state.studentTargetLang ? `&lang=${encodeURIComponent(state.studentTargetLang)}` : '';
   const roomParam = encodeURIComponent(state.roomId || 'SALA-1');
 
   // Se estiver hospedado em domínio público na web (como https://yanik-translator.onrender.com)
   if (typeof window !== 'undefined' && window.location && window.location.origin && !state.isFileProtocol) {
     const host = window.location.hostname;
     if (host !== 'localhost' && host !== '127.0.0.1' && !host.startsWith('192.168.') && !host.startsWith('10.') && !host.startsWith('172.')) {
-      return `${window.location.origin}/?room=${roomParam}&role=student&lang=${langParam}${uiParam}`;
+      return `${window.location.origin}/?room=${roomParam}&role=student${langParam}${uiParam}`;
     }
   }
 
   // Se estiver na rede local Wi-Fi, usa o IP da máquina para os celulares dos alunos
   if (state.serverInfo && state.serverInfo.primaryUrl) {
-    return `${state.serverInfo.primaryUrl}/?room=${roomParam}&role=student&lang=${langParam}${uiParam}`;
+    return `${state.serverInfo.primaryUrl}/?room=${roomParam}&role=student${langParam}${uiParam}`;
   }
 
   if (typeof window !== 'undefined' && window.location && window.location.origin && !state.isFileProtocol) {
-    return `${window.location.origin}/?room=${roomParam}&role=student&lang=${langParam}${uiParam}`;
+    return `${window.location.origin}/?room=${roomParam}&role=student${langParam}${uiParam}`;
   }
 
-  return `http://localhost:3000/?room=${roomParam}&role=student&lang=${langParam}${uiParam}`;
+  return `http://localhost:3000/?room=${roomParam}&role=student${langParam}${uiParam}`;
 }
 
 function renderQrCode() {
@@ -3962,12 +3958,31 @@ function renderShareLinks() {
 }
 
 function copyStudentLink() {
+  const input = document.getElementById('share-url-input');
+  if (input) {
+    input.select();
+    input.setSelectionRange(0, 99999);
+  }
   const url = getStudentJoinUrl();
-  navigator.clipboard.writeText(url).then(() => {
-    alert('✓ Link copiado para a área de transferência! Envie para os alunos.');
-  }).catch(() => {
-    prompt('Copie o link abaixo:', url);
-  });
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(() => {
+      showToast('✓ Link da sala copiado com sucesso!', 'success');
+    }).catch(() => {
+      try {
+        document.execCommand('copy');
+        showToast('✓ Link da sala copiado!', 'success');
+      } catch (e) {
+        prompt('Copie o link da sala abaixo:', url);
+      }
+    });
+  } else {
+    try {
+      document.execCommand('copy');
+      showToast('✓ Link da sala copiado!', 'success');
+    } catch (e) {
+      prompt('Copie o link da sala abaixo:', url);
+    }
+  }
 }
 
 // ========================================================
@@ -4190,11 +4205,12 @@ async function fetchAvailableRooms() {
   try {
     const res = await fetch('/api/rooms', { cache: 'no-cache' });
     if (res.ok) {
-      state.availableRooms = await res.json();
+      const data = await res.json();
+      state.availableRooms = Array.isArray(data) ? data : (Array.isArray(data.rooms) ? data.rooms : []);
       renderRoomCardsList();
       
       // Se a sala atual estiver na lista, sincroniza os detalhes
-      const match = state.availableRooms.find(r => r.id === state.roomId);
+      const match = state.availableRooms.find(r => r && r.id === state.roomId);
       if (match) {
         state.roomDetails = match;
         updateRoomDisplay();
@@ -4212,7 +4228,8 @@ function renderRoomCardsList() {
   const query = (state.roomSearchQuery || '').toLowerCase().trim();
   const filterSubj = state.roomFilterSubject || 'all';
 
-  const filtered = (state.availableRooms || []).filter(r => {
+  const list = Array.isArray(state.availableRooms) ? state.availableRooms : [];
+  const filtered = list.filter(r => {
     if (filterSubj !== 'all' && r.subject !== filterSubj) {
       return false;
     }
