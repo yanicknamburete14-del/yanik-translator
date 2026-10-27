@@ -102,16 +102,16 @@ const UI_TRANSLATIONS = {
     "nav_live": "Conectado",
     "nav_direct": "Modo Direto / Offline",
     "nav_room_prefix": "Sala: ",
-    "nav_projector": "📽️ Projetar QR Code",
+    "nav_projector": " Projetar QR Code",
     "tab_teacher": "Mesa do Professor",
     "tab_student": "Carteira do Aluno",
     "tab_dialogue": "Atendimento 1-para-1",
     "tab_guide": "Manual de Uso",
-    "teacher_card_title": "🎙️ Transmissão de Voz",
+    "teacher_card_title": " Transmissão de Voz",
     "teacher_card_desc": "Sua fala é capturada, traduzida em tempo real e transmitida aos alunos conectados",
     "teacher_input_lang_label": "Idioma de Entrada:",
     "teacher_mic_status_idle": "Toque no microfone para iniciar a transmissão",
-    "teacher_mic_status_live": "🎙️ Aula em Transmissão ao Vivo (Fale ao microfone)",
+    "teacher_mic_status_live": " Aula em Transmissão ao Vivo (Fale ao microfone)",
     "teacher_mic_hint": "Fale com clareza. A tradução para Hindi, Francês, Inglês e outros idiomas ocorre em tempo real.",
     "teacher_manual_label": "Digitar mensagem ou aviso para a turma (funciona mesmo sem microfone):",
     "teacher_manual_placeholder": "Ex: Abram o material no capítulo 3...",
@@ -167,7 +167,7 @@ const UI_TRANSLATIONS = {
     "projector_modal_desc": "Aponte a câmera do celular para ouvir a tradução da aula no seu idioma",
     "projector_wifi_label": "Rede Wi-Fi Local",
     "footer_text": "Yanik, Translator © 2026 • Sistema de Tradução Simultânea em Tempo Real • Compatível com PC, Mac, Android e iOS",
-    "btn_create_room": "➕ Criar / Mudar Sala",
+    "btn_create_room": " Criar / Mudar Sala",
     "btn_summarize_teacher": "✨ Resumir Aula com IA",
     "btn_browse_rooms": "🔍 Procurar / Trocar de Aula",
     "btn_class_summary": "✨ Resumo da Aula",
@@ -2486,7 +2486,9 @@ function setupTabs() {
 
 function switchTab(tabId) {
   state.activeTab = tabId;
-  state.role = tabId === 'teacher' ? 'teacher' : 'student';
+  if (tabId === 'teacher' || tabId === 'student') {
+    state.role = tabId;
+  }
 
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.toggle('active', btn.getAttribute('data-tab') === tabId);
@@ -2495,6 +2497,10 @@ function switchTab(tabId) {
   document.querySelectorAll('.tab-panel').forEach(panel => {
     panel.classList.toggle('active', panel.id === `tab-${tabId}`);
   });
+
+  if (tabId === 'teacher') {
+    renderShareLinks();
+  }
 
   // NÃO selecionar idioma automaticamente: solicita escolha ao entrar no ambiente se ainda não definido
   if (tabId === 'teacher' && !state.teacherLang) {
@@ -2506,7 +2512,6 @@ function switchTab(tabId) {
   connectRealtime();
 }
 
-// ========================================================
 // ========================================================
 // 2. CONEXÃO EM TEMPO REAL E RESILIÊNCIA INTELIGENTE
 // ========================================================
@@ -2532,10 +2537,10 @@ async function loadServerInfo() {
       }
       state.serverInfo = await res.json();
       state.isServerConnected = true;
-      renderShareLinks();
       updateConnectionStatus(true, 'Conectado');
       connectRealtime();
       fetchAvailableRooms();
+      renderShareLinks();
     } else {
       scheduleServerInfoRetry();
     }
@@ -2561,8 +2566,16 @@ function setStandaloneMode() {
   renderShareLinks();
 }
 
-function connectRealtime() {
-  if (!state.isServerConnected || state.isFileProtocol) {
+function connectRealtime(force = false) {
+  if (state.isFileProtocol) {
+    return;
+  }
+
+  const currentLang = (state.role === 'teacher' ? state.teacherLang : state.studentTargetLang) || '';
+  const clientName = state.role === 'teacher' ? 'Professor' : (currentLang ? `Aluno (${currentLang.toUpperCase()})` : 'Aluno');
+  const streamUrl = `/api/stream?room=${encodeURIComponent(state.roomId)}&role=${state.role}&lang=${encodeURIComponent(currentLang)}&name=${encodeURIComponent(clientName)}`;
+
+  if (!force && state.eventSource && state.eventSource.readyState !== EventSource.CLOSED && state.currentStreamUrl === streamUrl) {
     return;
   }
 
@@ -2571,13 +2584,11 @@ function connectRealtime() {
     state.eventSource = null;
   }
 
-  const currentLang = (state.role === 'teacher' ? state.teacherLang : state.studentTargetLang) || '';
-  const clientName = state.role === 'teacher' ? 'Professor' : (currentLang ? `Aluno (${currentLang.toUpperCase()})` : 'Aluno');
-  const streamUrl = `/api/stream?room=${encodeURIComponent(state.roomId)}&role=${state.role}&lang=${encodeURIComponent(currentLang)}&name=${encodeURIComponent(clientName)}`;
-
+  state.currentStreamUrl = streamUrl;
   state.eventSource = new EventSource(streamUrl);
 
   state.eventSource.onopen = () => {
+    state.isServerConnected = true;
     if (sseReconnectTimer) {
       clearTimeout(sseReconnectTimer);
       sseReconnectTimer = null;
@@ -2593,8 +2604,8 @@ function connectRealtime() {
       if (!sseReconnectTimer) {
         sseReconnectTimer = setTimeout(() => {
           sseReconnectTimer = null;
-          loadServerInfo();
-        }, 3000);
+          connectRealtime(true);
+        }, 2500);
       }
     }
   };
@@ -2629,10 +2640,16 @@ function updateConnectionStatus(online, labelKeyOrText) {
 
 function handleServerEvent(data) {
   if (data.type === 'connected') {
+    state.isServerConnected = true;
     state.clientId = data.clientId;
+    updateConnectionStatus(true, 'Conectado');
     if (data.roomDetails) {
       state.roomDetails = data.roomDetails;
       updateRoomDisplay();
+      updateRoomStats({
+        studentCount: data.roomDetails.studentCount || 0,
+        languages: data.roomDetails.languages || {}
+      });
     }
     if (data.history && data.history.length > 0) {
       data.history.forEach(msg => appendToHistory(msg, false));
@@ -2652,9 +2669,10 @@ function handleServerEvent(data) {
 }
 
 function updateRoomStats(data) {
+  const count = (data && typeof data.studentCount === 'number') ? data.studentCount : 0;
   const tStudents = document.getElementById('teacher-current-students');
   if (tStudents) {
-    tStudents.textContent = `${data.studentCount || 0} aluno(s) conectado(s)`;
+    tStudents.textContent = `${count} aluno(s) conectado(s)`;
   }
 
   const statsContainer = document.getElementById('connected-stats-pills');
@@ -2664,15 +2682,15 @@ function updateRoomStats(data) {
 
   const totalPill = document.createElement('span');
   totalPill.className = 'stat-pill';
-  totalPill.innerHTML = `👥 <strong>${data.studentCount} Aluno(s)</strong>`;
+  totalPill.innerHTML = `${UI_ICONS.users} <strong>${count} Aluno(s)</strong>`;
   statsContainer.appendChild(totalPill);
 
-  if (data.languages) {
+  if (data && data.languages) {
     Object.keys(data.languages).forEach(langCode => {
       const langObj = LANGUAGES.find(l => l.code === langCode);
       const pill = document.createElement('span');
       pill.className = 'stat-pill';
-      const flag = langObj ? langObj.flag : '🌐';
+      const flag = langObj ? langObj.flag : UI_ICONS.globe;
       const name = langObj ? langObj.name : langCode.toUpperCase();
       pill.innerHTML = `${flag} ${data.languages[langCode]} em ${name}`;
       statsContainer.appendChild(pill);
@@ -3927,20 +3945,29 @@ function getStudentJoinUrl() {
 }
 
 function renderQrCode() {
-  if (typeof QRCode === 'undefined') return;
   const url = getStudentJoinUrl();
+  const fallbackImg = (size) => `<img src="https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=6&data=${encodeURIComponent(url)}" width="${size}" height="${size}" alt="QR Code da Sala" style="display:block;border-radius:8px;" />`;
 
   const qrBox = document.getElementById('qrcode');
   if (qrBox) {
     qrBox.innerHTML = '';
-    new QRCode(qrBox, {
-      text: url,
-      width: 170,
-      height: 170,
-      colorDark: '#0f172a',
-      colorLight: '#ffffff',
-      correctLevel: QRCode.CorrectLevel.M
-    });
+    try {
+      if (typeof QRCode !== 'undefined') {
+        new QRCode(qrBox, {
+          text: url,
+          width: 170,
+          height: 170,
+          colorDark: '#0f172a',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.L
+        });
+      } else {
+        qrBox.innerHTML = fallbackImg(170);
+      }
+    } catch (err) {
+      console.warn('Usando fallback para QR Code:', err);
+      qrBox.innerHTML = fallbackImg(170);
+    }
   }
 
   const qrProjector = document.getElementById('qrcode-projector');
@@ -3949,23 +3976,35 @@ function renderQrCode() {
 
   if (qrProjector) {
     qrProjector.innerHTML = '';
-    new QRCode(qrProjector, {
-      text: url,
-      width: 280,
-      height: 280,
-      colorDark: '#0f172a',
-      colorLight: '#ffffff',
-      correctLevel: QRCode.CorrectLevel.M
-    });
+    try {
+      if (typeof QRCode !== 'undefined') {
+        new QRCode(qrProjector, {
+          text: url,
+          width: 280,
+          height: 280,
+          colorDark: '#0f172a',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.L
+        });
+      } else {
+        qrProjector.innerHTML = fallbackImg(280);
+      }
+    } catch (err) {
+      qrProjector.innerHTML = fallbackImg(280);
+    }
   }
 }
 
 function renderShareLinks() {
-  const shareInput = document.getElementById('share-url-input');
-  if (shareInput) {
-    shareInput.value = getStudentJoinUrl();
+  try {
+    const shareInput = document.getElementById('share-url-input');
+    if (shareInput) {
+      shareInput.value = getStudentJoinUrl();
+    }
+    renderQrCode();
+  } catch (err) {
+    console.warn('Erro em renderShareLinks:', err);
   }
-  renderQrCode();
 }
 
 function copyStudentLink() {
@@ -4225,6 +4264,10 @@ async function fetchAvailableRooms() {
       if (match) {
         state.roomDetails = match;
         updateRoomDisplay();
+        updateRoomStats({
+          studentCount: match.studentCount || 0,
+          languages: match.languages || {}
+        });
       }
     }
   } catch (err) {
