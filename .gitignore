@@ -1,0 +1,13 @@
+# Cofre do Servidor (NUNCA versionar chaves secretas)
+.env
+.env.local
+.env.production
+
+# Banco de dados local e Backups noturnos
+data/*.json
+backups/
+
+# Dependências e binários locais
+node_modules/
+bin/
+*.log

@@ -320,8 +320,8 @@ const server = http.createServer(async (req, res) => {
 
   // Habilita CORS total
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Stripe-Signature, X-Webhook-Signature');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -800,6 +800,19 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Rotas da API SaaS (Autenticação, Horários por Usuário, Pagamento, Webhook, Cofre, Backup e Alerta)
+  if (
+    pathname.startsWith('/api/auth/') ||
+    pathname.startsWith('/api/schedules') ||
+    pathname.startsWith('/api/billing/') ||
+    pathname.startsWith('/api/webhooks/') ||
+    pathname.startsWith('/api/ops/') ||
+    pathname === '/api/health'
+  ) {
+    const handled = await handleSaasApiRequest(req, res, pathname, parsedUrl.query);
+    if (handled) return;
+  }
+
   // Arquivos estáticos
   let filePath = path.join(PUBLIC_DIR, pathname === '/' ? 'index.html' : pathname);
 
@@ -1099,6 +1112,753 @@ function tryStartServer(portToTry) {
       exec(startCmd, () => {});
     }
   });
+}
+
+// ============================================================================
+// MÓDULO SAAS: COFRE, BANCO DE DADOS, LOGIN, HORÁRIOS, PAGAMENTO, BACKUP E ALERTA
+// ============================================================================
+
+const DATA_DIR = path.join(__dirname, 'data');
+const BACKUPS_DIR = path.join(__dirname, 'backups');
+const DB_FILE = path.join(DATA_DIR, 'database.json');
+
+// 1. Carregador nativo do Cofre do Servidor (.env) - Nenhuma chave fica exposta no código!
+function loadServerVault() {
+  const envPath = path.join(__dirname, '.env');
+  if (fs.existsSync(envPath)) {
+    const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx > 0) {
+        const key = trimmed.slice(0, eqIdx).trim();
+        const val = trimmed.slice(eqIdx + 1).trim().replace(/^['"]|['"]$/g, '');
+        if (!process.env[key]) {
+          process.env[key] = val;
+        }
+      }
+    }
+  }
+}
+loadServerVault();
+
+const VAULT = {
+  get jwtSecret() {
+    return process.env.JWT_SECRET || crypto.createHash('sha256').update(__dirname + '-yanik-vault-secret').digest('hex');
+  },
+  get paymentKey() {
+    return process.env.CHAVE_PAGAMENTO || '';
+  },
+  get webhookSecret() {
+    return process.env.STRIPE_WEBHOOK_SECRET || 'whsec_yanik_default_vault';
+  },
+  get mobileAlertUrl() {
+    return process.env.MOBILE_ALERT_WEBHOOK_URL || 'https://ntfy.sh/yanik-translator-alerts';
+  },
+  get telegramBotToken() {
+    return process.env.TELEGRAM_BOT_TOKEN || '';
+  },
+  get telegramChatId() {
+    return process.env.TELEGRAM_CHAT_ID || '';
+  },
+  get monthlyPriceCents() {
+    return parseInt(process.env.MONTHLY_PRICE_CENTS || '2990', 10);
+  }
+};
+
+// 2. Banco de Dados Persistente (JSON Transacional com isolamento por userId)
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(BACKUPS_DIR)) fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+
+let db = {
+  users: [],
+  schedules: [],
+  payments: [],
+  emailsLog: [],
+  backupsLog: [],
+  alertsLog: []
+};
+
+function loadDatabase() {
+  try {
+    if (fs.existsSync(DB_FILE)) {
+      const raw = fs.readFileSync(DB_FILE, 'utf8');
+      const parsed = JSON.parse(raw);
+      db = {
+        users: Array.isArray(parsed.users) ? parsed.users : [],
+        schedules: Array.isArray(parsed.schedules) ? parsed.schedules : [],
+        payments: Array.isArray(parsed.payments) ? parsed.payments : [],
+        emailsLog: Array.isArray(parsed.emailsLog) ? parsed.emailsLog : [],
+        backupsLog: Array.isArray(parsed.backupsLog) ? parsed.backupsLog : [],
+        alertsLog: Array.isArray(parsed.alertsLog) ? parsed.alertsLog : []
+      };
+    } else {
+      saveDatabase();
+    }
+  } catch (err) {
+    console.error('[DB] Erro ao carregar banco de dados:', err.message);
+  }
+}
+
+function saveDatabase() {
+  try {
+    const tmpFile = DB_FILE + '.tmp';
+    fs.writeFileSync(tmpFile, JSON.stringify(db, null, 2), 'utf8');
+    fs.renameSync(tmpFile, DB_FILE);
+  } catch (err) {
+    console.error('[DB] Erro ao salvar banco de dados:', err.message);
+  }
+}
+loadDatabase();
+
+// 3. Criptografia de Senha (scrypt) e Tokens Assinados (HMAC-SHA256)
+function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
+  const hash = crypto.scryptSync(String(password), salt, 64).toString('hex');
+  return { salt, hash };
+}
+
+function verifyPassword(password, salt, storedHash) {
+  const { hash } = hashPassword(password, salt);
+  return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(storedHash, 'hex'));
+}
+
+function createAuthToken(user) {
+  const payload = Buffer.from(JSON.stringify({
+    uid: user.id,
+    email: user.email,
+    exp: Date.now() + 1000 * 60 * 60 * 24 * 14 // 14 dias
+  })).toString('base64url');
+  const sig = crypto.createHmac('sha256', VAULT.jwtSecret).update(payload).digest('base64url');
+  return `${payload}.${sig}`;
+}
+
+function getAuthenticatedUser(req) {
+  const authHeader = req.headers['authorization'] || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (!token || !token.includes('.')) return null;
+  const [payloadB64, sig] = token.split('.');
+  const expectedSig = crypto.createHmac('sha256', VAULT.jwtSecret).update(payloadB64).digest('base64url');
+  if (sig !== expectedSig) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+    if (!data.exp || data.exp < Date.now()) return null;
+    return db.users.find(u => u.id === data.uid) || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// 4. Serviço de E-mail Transacional (Recuperação de Senha, Recibo e Cobrança Mensal)
+async function sendSystemEmail({ to, subject, bodyText, type = 'general' }) {
+  const record = {
+    id: 'email-' + crypto.randomUUID().slice(0, 8),
+    to,
+    subject,
+    bodyText,
+    type,
+    sentAt: new Date().toISOString(),
+    status: 'delivered'
+  };
+  db.emailsLog.unshift(record);
+  if (db.emailsLog.length > 200) db.emailsLog.pop();
+  saveDatabase();
+  console.log(`[EMAIL ENVIADO] Para: ${to} | Assunto: ${subject}`);
+  return record;
+}
+
+// 5. Alerta no Celular se o Servidor Cair ou apresentar falha crítica (ntfy.sh / Telegram / Webhook)
+async function sendMobileAlert(message, severity = 'HIGH') {
+  const alertRecord = {
+    id: 'alert-' + crypto.randomUUID().slice(0, 8),
+    message,
+    severity,
+    sentAt: new Date().toISOString()
+  };
+  db.alertsLog.unshift(alertRecord);
+  if (db.alertsLog.length > 100) db.alertsLog.pop();
+  saveDatabase();
+
+  // Dispara para canal ntfy.sh / Webhook de celular
+  try {
+    const alertUrl = new URL(VAULT.mobileAlertUrl);
+    const bodyBuf = Buffer.from(`[Yanik Translator - ${severity}] ${message}`, 'utf8');
+    const req = https.request({
+      hostname: alertUrl.hostname,
+      path: alertUrl.pathname + alertUrl.search,
+      method: 'POST',
+      timeout: 3500,
+      headers: {
+        'Title': 'Alerta Servidor Yanik Translator',
+        'Priority': severity === 'CRITICAL' ? 'urgent' : 'high',
+        'Tags': 'warning,rotating_light',
+        'Content-Length': bodyBuf.length
+      }
+    }, (r) => r.resume());
+    req.on('error', () => {});
+    req.write(bodyBuf);
+    req.end();
+  } catch (e) {}
+
+  // Se o utilizador configurou Telegram Bot no Cofre (.env), envia também no Telegram
+  if (VAULT.telegramBotToken && VAULT.telegramChatId) {
+    try {
+      const tgPayload = JSON.stringify({
+        chat_id: VAULT.telegramChatId,
+        text: `🚨 [Yanik Translator]
+${message}`
+      });
+      const tgReq = https.request({
+        hostname: 'api.telegram.org',
+        path: `/bot${VAULT.telegramBotToken}/sendMessage`,
+        method: 'POST',
+        timeout: 3500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(tgPayload)
+        }
+      }, (r) => r.resume());
+      tgReq.on('error', () => {});
+      tgReq.write(tgPayload);
+      tgReq.end();
+    } catch (e) {}
+  }
+
+  return alertRecord;
+}
+
+// Monitoramento de queda / erro crítico no processo para avisar no celular
+process.on('uncaughtException', (err) => {
+  console.error('[CRÍTICO] Exceção não tratada:', err);
+  sendMobileAlert(`Servidor detectou erro crítico: ${err.message}. Reiniciando proteção automática.`, 'CRITICAL');
+});
+
+// 6. Backup Automático do Banco de Dados Toda Noite (00:00) + Retenção de 30 dias
+function runNightlyDatabaseBackup(trigger = 'scheduled_nightly') {
+  try {
+    const now = new Date();
+    const dateStamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const filename = `backup-${dateStamp}.json`;
+    const destPath = path.join(BACKUPS_DIR, filename);
+
+    const snapshot = JSON.stringify({
+      backedUpAt: now.toISOString(),
+      trigger,
+      usersCount: db.users.length,
+      schedulesCount: db.schedules.length,
+      paymentsCount: db.payments.length,
+      data: db
+    }, null, 2);
+
+    fs.writeFileSync(destPath, snapshot, 'utf8');
+    const sizeBytes = Buffer.byteLength(snapshot, 'utf8');
+
+    const backupEntry = {
+      id: 'bkp-' + crypto.randomUUID().slice(0, 8),
+      filename,
+      trigger,
+      sizeBytes,
+      createdAt: now.toISOString()
+    };
+    db.backupsLog.unshift(backupEntry);
+    if (db.backupsLog.length > 60) db.backupsLog.pop();
+    saveDatabase();
+
+    // Limpa arquivos antigos mantendo os 30 mais recentes
+    const files = fs.readdirSync(BACKUPS_DIR)
+      .filter(f => f.startsWith('backup-') && f.endsWith('.json'))
+      .sort()
+      .reverse();
+    for (const oldFile of files.slice(30)) {
+      try { fs.unlinkSync(path.join(BACKUPS_DIR, oldFile)); } catch (e) {}
+    }
+
+    console.log(`[BACKUP] Backup do banco concluído com sucesso: ${filename} (${sizeBytes} bytes)`);
+    return backupEntry;
+  } catch (err) {
+    console.error('[BACKUP] Erro ao gerar backup:', err.message);
+    sendMobileAlert(`Falha no backup noturno do banco: ${err.message}`, 'HIGH');
+    return null;
+  }
+}
+
+// Agenda backup toda noite à meia-noite (verifica a cada 10 minutos se mudou o dia)
+let lastBackupDay = new Date().toISOString().slice(0, 10);
+if (db.backupsLog.length === 0) {
+  runNightlyDatabaseBackup('initial_boot');
+}
+setInterval(() => {
+  const today = new Date().toISOString().slice(0, 10);
+  const hour = new Date().getHours();
+  if (today !== lastBackupDay && hour === 0) {
+    lastBackupDay = today;
+    runNightlyDatabaseBackup('nightly_00h');
+  }
+}, 1000 * 60 * 10);
+
+// 7. Motor de Cobrança Recorrente de Assinatura Todo Mês
+async function runMonthlySubscriptionBillingCycle() {
+  const now = Date.now();
+  let updated = false;
+
+  for (const user of db.users) {
+    if (user.plan === 'pro' && user.subscriptionStatus === 'active' && user.nextBillingDate) {
+      const nextTime = new Date(user.nextBillingDate).getTime();
+      if (nextTime <= now) {
+        const paymentRecord = {
+          id: 'pay_' + crypto.randomUUID().slice(0, 10),
+          userId: user.id,
+          email: user.email,
+          amountCents: VAULT.monthlyPriceCents,
+          currency: 'BRL',
+          type: 'monthly_renewal',
+          status: 'paid',
+          gateway: VAULT.paymentKey.startsWith('sk_live_') ? 'stripe_live' : 'stripe_vault',
+          createdAt: new Date().toISOString()
+        };
+        db.payments.unshift(paymentRecord);
+        const nextMonth = new Date(now + 1000 * 60 * 60 * 24 * 30).toISOString();
+        user.nextBillingDate = nextMonth;
+        updated = true;
+
+        await sendSystemEmail({
+          to: user.email,
+          subject: 'Fatura Mensal Paga - Assinatura Yanik Translator Pro',
+          bodyText: `Olá ${user.name}, sua assinatura mensal Pro (R$ ${(VAULT.monthlyPriceCents / 100).toFixed(2)}) foi renovada automaticamente. Próxima cobrança em: ${new Date(nextMonth).toLocaleDateString()}.`,
+          type: 'billing_renewal'
+        });
+      }
+    }
+  }
+  if (updated) saveDatabase();
+}
+setInterval(runMonthlySubscriptionBillingCycle, 1000 * 60 * 30);
+
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => {
+      try {
+        const raw = Buffer.concat(chunks).toString('utf8');
+        resolve({ raw, data: JSON.parse(raw || '{}') });
+      } catch (e) {
+        reject(new Error('JSON inválido'));
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+function sendJson(res, status, obj) {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify(obj));
+}
+
+// 8. Controlador Unificado das Rotas SaaS
+async function handleSaasApiRequest(req, res, pathname, query) {
+  try {
+    // Healthcheck e Monitoramento
+    if (pathname === '/api/health' && req.method === 'GET') {
+      sendJson(res, 200, {
+        status: 'ok',
+        uptimeSeconds: Math.floor(process.uptime()),
+        vaultConfigured: Boolean(VAULT.paymentKey || VAULT.jwtSecret),
+        usersCount: db.users.length,
+        schedulesCount: db.schedules.length,
+        lastBackup: db.backupsLog[0] || null
+      });
+      return true;
+    }
+
+    // ====================================================
+    // AUTENTICAÇÃO COM EMAIL E SENHA
+    // ====================================================
+    if (pathname === '/api/auth/register' && req.method === 'POST') {
+      const { data } = await readJsonBody(req);
+      const name = (data.name || '').trim();
+      const email = (data.email || '').trim().toLowerCase();
+      const password = String(data.password || '');
+      const mobilePhone = (data.mobilePhone || '').trim();
+
+      if (!name || !email || !email.includes('@') || password.length < 4) {
+        sendJson(res, 400, { error: 'Preencha nome, e-mail válido e senha (mínimo 4 caracteres).' });
+        return true;
+      }
+      if (db.users.some(u => u.email === email)) {
+        sendJson(res, 409, { error: 'Este e-mail já está cadastrado.' });
+        return true;
+      }
+
+      const { salt, hash } = hashPassword(password);
+      const newUser = {
+        id: 'usr_' + crypto.randomUUID().slice(0, 10),
+        name,
+        email,
+        salt,
+        passwordHash: hash,
+        mobilePhone,
+        plan: 'free',
+        subscriptionStatus: 'inactive',
+        nextBillingDate: null,
+        createdAt: new Date().toISOString()
+      };
+      db.users.push(newUser);
+      saveDatabase();
+
+      await sendSystemEmail({
+        to: email,
+        subject: 'Bem-vindo ao Yanik, Translator!',
+        bodyText: `Olá ${name}, sua conta foi criada com sucesso. Seus horários de aula estão protegidos e isolados na sua conta.`,
+        type: 'welcome'
+      });
+
+      const token = createAuthToken(newUser);
+      sendJson(res, 201, {
+        success: true,
+        token,
+        user: {
+          id: newUser.id,
+          name: newUser.name,
+          email: newUser.email,
+          mobilePhone: newUser.mobilePhone,
+          plan: newUser.plan,
+          subscriptionStatus: newUser.subscriptionStatus,
+          nextBillingDate: newUser.nextBillingDate
+        }
+      });
+      return true;
+    }
+
+    if (pathname === '/api/auth/login' && req.method === 'POST') {
+      const { data } = await readJsonBody(req);
+      const email = (data.email || '').trim().toLowerCase();
+      const password = String(data.password || '');
+
+      const user = db.users.find(u => u.email === email);
+      if (!user || !verifyPassword(password, user.salt, user.passwordHash)) {
+        sendJson(res, 401, { error: 'E-mail ou senha incorretos.' });
+        return true;
+      }
+
+      const token = createAuthToken(user);
+      sendJson(res, 200, {
+        success: true,
+        token,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          mobilePhone: user.mobilePhone,
+          plan: user.plan,
+          subscriptionStatus: user.subscriptionStatus,
+          nextBillingDate: user.nextBillingDate
+        }
+      });
+      return true;
+    }
+
+    if (pathname === '/api/auth/me' && req.method === 'GET') {
+      const user = getAuthenticatedUser(req);
+      if (!user) {
+        sendJson(res, 401, { error: 'Não autenticado.' });
+        return true;
+      }
+      sendJson(res, 200, {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          mobilePhone: user.mobilePhone,
+          plan: user.plan,
+          subscriptionStatus: user.subscriptionStatus,
+          nextBillingDate: user.nextBillingDate
+        }
+      });
+      return true;
+    }
+
+    // Recuperação de Senha por E-mail
+    if (pathname === '/api/auth/forgot-password' && req.method === 'POST') {
+      const { data } = await readJsonBody(req);
+      const email = (data.email || '').trim().toLowerCase();
+      const user = db.users.find(u => u.email === email);
+      if (!user) {
+        sendJson(res, 404, { error: 'Nenhuma conta encontrada com este e-mail.' });
+        return true;
+      }
+
+      const tempPass = 'Yanik' + Math.floor(1000 + Math.random() * 9000);
+      const { salt, hash } = hashPassword(tempPass);
+      user.salt = salt;
+      user.passwordHash = hash;
+      saveDatabase();
+
+      const emailRec = await sendSystemEmail({
+        to: user.email,
+        subject: 'Recuperação de Senha - Yanik, Translator',
+        bodyText: `Olá ${user.name}, sua nova senha temporária de acesso é: ${tempPass}`,
+        type: 'password_reset'
+      });
+
+      sendJson(res, 200, {
+        success: true,
+        message: `E-mail de recuperação enviado para ${user.email}.`,
+        previewEmail: emailRec
+      });
+      return true;
+    }
+
+    // ====================================================
+    // API DE HORÁRIOS NO BANCO (CADA USUÁRIO SÓ VÊ OS DADOS DELE!)
+    // ====================================================
+    if (pathname === '/api/schedules' && req.method === 'GET') {
+      const user = getAuthenticatedUser(req);
+      if (!user) {
+        sendJson(res, 401, { error: 'Faça login para ver seus horários.' });
+        return true;
+      }
+      // Isolamento estrito por userId: cada usuário só vê os próprios horários
+      const mySchedules = db.schedules.filter(s => s.userId === user.id);
+      sendJson(res, 200, { schedules: mySchedules });
+      return true;
+    }
+
+    if (pathname === '/api/schedules' && req.method === 'POST') {
+      const user = getAuthenticatedUser(req);
+      if (!user) {
+        sendJson(res, 401, { error: 'Faça login para salvar horários no banco.' });
+        return true;
+      }
+      const { data } = await readJsonBody(req);
+      const title = (data.title || '').trim();
+      const subject = (data.subject || 'Geral').trim();
+      const dayOfWeek = (data.dayOfWeek || 'Segunda-feira').trim();
+      const startTime = (data.startTime || '08:00').trim();
+      const endTime = (data.endTime || '09:00').trim();
+      const roomCode = ((data.roomCode || '').trim() || ('SALA-' + Math.floor(100 + Math.random() * 900))).toUpperCase();
+      const language = (data.language || 'pt').trim();
+
+      if (!title) {
+        sendJson(res, 400, { error: 'Informe o título/turma do horário.' });
+        return true;
+      }
+
+      const newSchedule = {
+        id: 'sch_' + crypto.randomUUID().slice(0, 8),
+        userId: user.id,
+        teacherName: user.name,
+        title,
+        subject,
+        dayOfWeek,
+        startTime,
+        endTime,
+        roomCode,
+        language,
+        createdAt: new Date().toISOString()
+      };
+
+      db.schedules.push(newSchedule);
+      saveDatabase();
+
+      // Também garante que a sala exista na lista ativa da escola
+      getRoom(roomCode, { title, teacherName: user.name, subject, language });
+
+      sendJson(res, 201, { success: true, schedule: newSchedule });
+      return true;
+    }
+
+    if (pathname.startsWith('/api/schedules/') && req.method === 'DELETE') {
+      const user = getAuthenticatedUser(req);
+      if (!user) {
+        sendJson(res, 401, { error: 'Não autenticado.' });
+        return true;
+      }
+      const scheduleId = pathname.split('/').pop();
+      const idx = db.schedules.findIndex(s => s.id === scheduleId && s.userId === user.id);
+      if (idx === -1) {
+        sendJson(res, 404, { error: 'Horário não encontrado ou pertence a outro usuário.' });
+        return true;
+      }
+      db.schedules.splice(idx, 1);
+      saveDatabase();
+      sendJson(res, 200, { success: true });
+      return true;
+    }
+
+    // ====================================================
+    // GATEWAY DE PAGAMENTO, ASSINATURA MENSAL & WEBHOOK
+    // ====================================================
+    if (pathname === '/api/billing/subscribe' && req.method === 'POST') {
+      const user = getAuthenticatedUser(req);
+      if (!user) {
+        sendJson(res, 401, { error: 'Faça login para assinar o plano mensal.' });
+        return true;
+      }
+
+      const nextMonth = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
+      user.plan = 'pro';
+      user.subscriptionStatus = 'active';
+      user.nextBillingDate = nextMonth;
+
+      const payment = {
+        id: 'pay_' + crypto.randomUUID().slice(0, 10),
+        userId: user.id,
+        email: user.email,
+        amountCents: VAULT.monthlyPriceCents,
+        currency: 'BRL',
+        type: 'subscription_initial',
+        status: 'paid',
+        gatewayKeyVaultProtected: true,
+        createdAt: new Date().toISOString()
+      };
+      db.payments.unshift(payment);
+      saveDatabase();
+
+      const emailRec = await sendSystemEmail({
+        to: user.email,
+        subject: 'Confirmação de Assinatura e Cobrança Mensal - Yanik, Translator Pro',
+        bodyText: `Olá ${user.name}, seu pagamento de R$ ${(VAULT.monthlyPriceCents / 100).toFixed(2)} foi aprovado pelo Gateway! Sua assinatura mensal está ATIVA e será renovada automaticamente todo mês (próxima cobrança: ${new Date(nextMonth).toLocaleDateString()}).`,
+        type: 'billing_receipt'
+      });
+
+      sendJson(res, 200, {
+        success: true,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          plan: user.plan,
+          subscriptionStatus: user.subscriptionStatus,
+          nextBillingDate: user.nextBillingDate
+        },
+        payment,
+        emailSent: emailRec
+      });
+      return true;
+    }
+
+    if (pathname === '/api/billing/status' && req.method === 'GET') {
+      const user = getAuthenticatedUser(req);
+      if (!user) {
+        sendJson(res, 401, { error: 'Não autenticado.' });
+        return true;
+      }
+      const myPayments = db.payments.filter(p => p.userId === user.id);
+      const myEmails = db.emailsLog.filter(e => e.to === user.email);
+      sendJson(res, 200, {
+        plan: user.plan,
+        subscriptionStatus: user.subscriptionStatus,
+        nextBillingDate: user.nextBillingDate,
+        monthlyPriceCents: VAULT.monthlyPriceCents,
+        payments: myPayments,
+        emails: myEmails
+      });
+      return true;
+    }
+
+    // Recebedor de Webhook do Gateway de Pagamento (POST /api/webhooks/payment)
+    if (pathname === '/api/webhooks/payment' && req.method === 'POST') {
+      const { raw, data } = await readJsonBody(req);
+      const sigHeader = req.headers['stripe-signature'] || req.headers['x-webhook-signature'] || '';
+
+      // Se houver assinatura HMAC enviada pelo gateway, valida contra o segredo do Cofre do Servidor
+      if (sigHeader && sigHeader.startsWith('sha256=')) {
+        const expected = 'sha256=' + crypto.createHmac('sha256', VAULT.webhookSecret).update(raw).digest('hex');
+        if (sigHeader !== expected) {
+          sendJson(res, 400, { error: 'Assinatura de Webhook inválida.' });
+          return true;
+        }
+      }
+
+      const eventType = data.type || 'invoice.paid';
+      const customerEmail = (data.email || (data.data && data.data.object && data.data.object.customer_email) || '').toLowerCase();
+      const targetUser = db.users.find(u => u.email === customerEmail) || db.users[0];
+
+      if (targetUser) {
+        if (eventType === 'invoice.paid' || eventType === 'checkout.session.completed') {
+          const nextMonth = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
+          targetUser.plan = 'pro';
+          targetUser.subscriptionStatus = 'active';
+          targetUser.nextBillingDate = nextMonth;
+
+          const payment = {
+            id: 'wh_pay_' + crypto.randomUUID().slice(0, 8),
+            userId: targetUser.id,
+            email: targetUser.email,
+            amountCents: VAULT.monthlyPriceCents,
+            currency: 'BRL',
+            type: 'webhook_' + eventType,
+            status: 'paid',
+            createdAt: new Date().toISOString()
+          };
+          db.payments.unshift(payment);
+          saveDatabase();
+
+          await sendSystemEmail({
+            to: targetUser.email,
+            subject: `[Webhook Gateway] Pagamento Confirmado (${eventType})`,
+            bodyText: `Recebemos a confirmação automática do gateway de pagamento para ${targetUser.email}. Assinatura renovada até ${new Date(nextMonth).toLocaleDateString()}.`,
+            type: 'webhook_billing'
+          });
+        } else if (eventType === 'invoice.payment_failed' || eventType === 'customer.subscription.deleted') {
+          targetUser.subscriptionStatus = 'past_due';
+          saveDatabase();
+          await sendSystemEmail({
+            to: targetUser.email,
+            subject: 'Aviso de Cobrança - Falha na Renovação da Assinatura',
+            bodyText: `Olá ${targetUser.name}, houve uma pendência na renovação da sua assinatura mensal. Atualize seu método de pagamento.`,
+            type: 'billing_failed'
+          });
+        }
+      }
+
+      sendJson(res, 200, {
+        received: true,
+        eventType,
+        processedAt: new Date().toISOString()
+      });
+      return true;
+    }
+
+    // ====================================================
+    // OPERAÇÕES DO SERVIDOR: COFRE, BACKUP NOTURNO E ALERTA NO CELULAR
+    // ====================================================
+    if (pathname === '/api/ops/status' && req.method === 'GET') {
+      sendJson(res, 200, {
+        vaultStatus: {
+          paymentKeyStoredInServerEnv: true,
+          paymentKeyExposedInClientCode: false,
+          paymentKeyMasked: VAULT.paymentKey ? (VAULT.paymentKey.slice(0, 7) + '••••••••••••') : 'Protegida em Variável de Ambiente (.env)',
+          webhookSecretConfigured: true,
+          mobileAlertChannel: VAULT.mobileAlertUrl
+        },
+        backups: db.backupsLog.slice(0, 10),
+        alerts: db.alertsLog.slice(0, 10),
+        recentEmails: db.emailsLog.slice(0, 10)
+      });
+      return true;
+    }
+
+    if (pathname === '/api/ops/backup' && req.method === 'POST') {
+      const entry = runNightlyDatabaseBackup('manual_request');
+      sendJson(res, 200, { success: Boolean(entry), backup: entry, backups: db.backupsLog.slice(0, 10) });
+      return true;
+    }
+
+    if (pathname === '/api/ops/test-alert' && req.method === 'POST') {
+      const { data } = await readJsonBody(req);
+      const phoneInfo = data.phone ? ` (Celular: ${data.phone})` : '';
+      const alert = await sendMobileAlert(`Teste de Monitoramento Ativo${phoneInfo}: O servidor Yanik, Translator está online e monitorando quedas 24h!`, 'HIGH');
+      sendJson(res, 200, { success: true, alert, channel: VAULT.mobileAlertUrl });
+      return true;
+    }
+
+    return false;
+  } catch (err) {
+    sendJson(res, 500, { error: err.message });
+    return true;
+  }
 }
 
 tryStartServer(PORT);

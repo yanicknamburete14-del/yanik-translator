@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Yanik, Translator - Plataforma de Tradução Simultânea</title>
   <meta name="description" content="Yanik, Translator - Software profissional de tradução simultânea em tempo real de voz para ambientes educacionais.">
-  <link rel="stylesheet" href="css/style.css?v=11.0">
+  <link rel="stylesheet" href="css/style.css?v=12.0">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>YN</text></svg>">
 </head>
 <body>
@@ -59,6 +59,11 @@
             <option value="ur">اردو</option>
           </select>
         </div>
+
+        <button class="btn-action btn-primary" id="btn-open-saas-modal" title="Login, Meus Horários no Banco, Assinatura e Cofre/Backups">
+          <svg class="ui-icon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span id="nav-saas-btn-label">Horários & Conta</span>
+        </button>
 
         <button class="btn-action btn-secondary" id="btn-open-projector" title="Exibir QR Code para projeção na sala de aula">
           <svg class="ui-icon" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
@@ -739,6 +744,176 @@
       </div>
   </div>
 
+  <!-- ======================================================== -->
+  <!-- MODAL SAAS: LOGIN, HORÁRIOS NO BANCO, ASSINATURA E COFRE -->
+  <!-- ======================================================== -->
+  <div id="saas-modal" class="modal-overlay">
+    <div class="modal-content modal-large" style="max-width: 780px;">
+      <button class="modal-close" id="btn-close-saas-modal">✕</button>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border);">
+        <div>
+          <h2 style="font-size: 1.2rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            <svg class="ui-icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <span>Central da Conta, Horários no Banco & Assinatura</span>
+          </h2>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+            Dados isolados por usuário • Pagamento recorrente mensal • Cofre do Servidor & Backup Noturno
+          </p>
+        </div>
+        <div id="saas-user-badge" style="font-size: 0.78rem; font-weight: 600; padding: 5px 12px; border-radius: 999px; background: var(--bg-subtle); border: 1px solid var(--border); color: var(--text-secondary);">
+          Visitante (Não autenticado)
+        </div>
+      </div>
+
+      <!-- Abas internas do Painel SaaS -->
+      <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px;">
+        <button type="button" class="btn-action btn-secondary saas-tab-btn active" data-saas-tab="auth" style="font-size: 0.8rem; padding: 6px 12px;">
+          <svg class="ui-icon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span>1. Login & Senha</span>
+        </button>
+        <button type="button" class="btn-action btn-secondary saas-tab-btn" data-saas-tab="schedules" style="font-size: 0.8rem; padding: 6px 12px;">
+          <svg class="ui-icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span>2. Meus Horários (Banco)</span>
+        </button>
+        <button type="button" class="btn-action btn-secondary saas-tab-btn" data-saas-tab="billing" style="font-size: 0.8rem; padding: 6px 12px;">
+          <svg class="ui-icon" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+          <span>3. Assinatura & Webhook</span>
+        </button>
+        <button type="button" class="btn-action btn-secondary saas-tab-btn" data-saas-tab="ops" style="font-size: 0.8rem; padding: 6px 12px;">
+          <svg class="ui-icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span>4. Cofre, Backup & Alerta</span>
+        </button>
+      </div>
+
+      <!-- ABA 1: LOGIN E CADASTRO COM EMAIL E SENHA -->
+      <div id="saas-panel-auth" class="saas-subpanel">
+        <div id="saas-auth-logged-out" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+          <!-- Entrar -->
+          <div style="background: var(--bg-subtle); padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+            <h3 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 10px; color: var(--text-primary);">Entrar na Minha Conta</h3>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <input type="email" id="saas-login-email" class="form-input" placeholder="Seu e-mail (ex: professor@escola.com)">
+              <input type="password" id="saas-login-password" class="form-input" placeholder="Sua senha">
+              <button type="button" id="btn-saas-login" class="btn-action btn-primary" style="width: 100%; justify-content: center;">Entrar com E-mail e Senha</button>
+              <button type="button" id="btn-saas-forgot-pass" class="btn-action btn-secondary" style="width: 100%; justify-content: center; font-size: 0.76rem;">Esqueci a Senha (Receber por E-mail)</button>
+            </div>
+          </div>
+
+          <!-- Criar Conta -->
+          <div style="background: var(--bg-subtle); padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+            <h3 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 10px; color: var(--text-primary);">Criar Nova Conta (Isolamento de Dados)</h3>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <input type="text" id="saas-reg-name" class="form-input" placeholder="Seu nome (ex: Prof. Yanik)">
+              <input type="email" id="saas-reg-email" class="form-input" placeholder="Seu e-mail">
+              <input type="password" id="saas-reg-password" class="form-input" placeholder="Crie uma senha segura">
+              <input type="tel" id="saas-reg-phone" class="form-input" placeholder="Celular p/ alertas (opcional)">
+              <button type="button" id="btn-saas-register" class="btn-action btn-primary" style="width: 100%; justify-content: center;">Cadastrar Conta no Banco</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="saas-auth-logged-in" style="display: none; background: var(--bg-subtle); padding: 18px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div>
+              <h3 style="font-size: 1rem; font-weight: 700; color: var(--text-primary);" id="saas-profile-name">Prof. Yanik</h3>
+              <p style="font-size: 0.84rem; color: var(--text-secondary);" id="saas-profile-email">professor@escola.com</p>
+              <p style="font-size: 0.78rem; color: var(--accent); font-weight: 600; margin-top: 4px;" id="saas-profile-plan">Plano: Gratuito</p>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" id="btn-saas-goto-schedules" class="btn-action btn-primary" style="font-size: 0.8rem;">Ver Meus Horários</button>
+              <button type="button" id="btn-saas-logout" class="btn-action btn-secondary" style="font-size: 0.8rem;">Sair da Conta</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ABA 2: HORÁRIOS SALVOS NO BANCO (ISOLADOS POR USUÁRIO) -->
+      <div id="saas-panel-schedules" class="saas-subpanel" style="display: none;">
+        <div style="background: var(--bg-subtle); padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 14px;">
+          <h3 style="font-size: 0.9rem; font-weight: 700; margin-bottom: 8px; color: var(--text-primary);">Novo Horário de Aula (Salvo no Banco na Sua Conta)</h3>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px;">
+            <input type="text" id="sch-title" class="form-input" placeholder="Turma / Aula (ex: Mat 7A)">
+            <select id="sch-day" class="form-select">
+              <option value="Segunda-feira">Segunda-feira</option>
+              <option value="Terça-feira">Terça-feira</option>
+              <option value="Quarta-feira">Quarta-feira</option>
+              <option value="Quinta-feira">Quinta-feira</option>
+              <option value="Sexta-feira">Sexta-feira</option>
+              <option value="Sábado">Sábado</option>
+            </select>
+            <input type="time" id="sch-start" class="form-input" value="08:00">
+            <input type="time" id="sch-end" class="form-input" value="09:00">
+            <input type="text" id="sch-room" class="form-input" placeholder="Sala (ex: SALA-7A)" style="text-transform: uppercase;">
+            <button type="button" id="btn-sch-save" class="btn-action btn-primary" style="justify-content: center;">Salvar no Banco</button>
+          </div>
+        </div>
+
+        <div id="saas-schedules-list" style="max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+          <p style="font-size: 0.84rem; color: var(--text-muted); text-align: center; padding: 20px;">Faça login para visualizar e gerenciar exclusivamente os seus horários salvos no banco.</p>
+        </div>
+      </div>
+
+      <!-- ABA 3: GATEWAY DE PAGAMENTO, ASSINATURA MENSAL, WEBHOOK E E-MAILS -->
+      <div id="saas-panel-billing" class="saas-subpanel" style="display: none;">
+        <div style="background: var(--bg-subtle); padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h3 style="font-size: 0.96rem; font-weight: 700; color: var(--text-primary);">Assinatura Mensal Recorrente — Yanik, Translator Pro</h3>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
+              Cobrança automática todo mês via Gateway (CHAVE_PAGAMENTO protegida no Cofre do Servidor) + Envio automático de recibo por e-mail.
+            </p>
+            <div id="saas-billing-status-line" style="font-size: 0.8rem; font-weight: 600; color: var(--accent); margin-top: 6px;">
+              Status: Aguardando assinatura
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" id="btn-saas-subscribe" class="btn-action btn-primary">Assinar Plano Mensal (R$ 29,90/mês)</button>
+            <button type="button" id="btn-saas-test-webhook" class="btn-action btn-secondary" style="font-size: 0.76rem;">Simular Webhook Pagamento</button>
+          </div>
+        </div>
+
+        <h4 style="font-size: 0.84rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px;">Histórico de Cobranças & E-mails Enviados (Senha e Faturas):</h4>
+        <div id="saas-billing-logs" style="max-height: 220px; overflow-y: auto; background: var(--bg-subtle); padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border); font-size: 0.78rem;">
+          Nenhum registro ainda.
+        </div>
+      </div>
+
+      <!-- ABA 4: COFRE DO SERVIDOR, BACKUP NOTURNO E ALERTA NO CELULAR -->
+      <div id="saas-panel-ops" class="saas-subpanel" style="display: none;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 14px;">
+          <div style="background: var(--bg-subtle); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+            <strong style="font-size: 0.82rem; color: var(--text-primary); display: block;">Cofre do Servidor (.env)</strong>
+            <p id="ops-vault-info" style="font-size: 0.76rem; color: var(--text-secondary); margin-top: 4px;">
+              CHAVE_PAGAMENTO isolada no servidor (Zero chaves no código-fonte).
+            </p>
+          </div>
+
+          <div style="background: var(--bg-subtle); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+            <strong style="font-size: 0.82rem; color: var(--text-primary); display: block;">Backup Automático Toda Noite</strong>
+            <p style="font-size: 0.76rem; color: var(--text-secondary); margin-top: 4px; margin-bottom: 8px;">
+              Salva cópia completa do banco às 00:00 na pasta segura de backups.
+            </p>
+            <button type="button" id="btn-ops-backup-now" class="btn-action btn-primary" style="font-size: 0.76rem; padding: 5px 10px;">Fazer Backup Agora</button>
+          </div>
+
+          <div style="background: var(--bg-subtle); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+            <strong style="font-size: 0.82rem; color: var(--text-primary); display: block;">Alerta no Celular se Cair</strong>
+            <p style="font-size: 0.76rem; color: var(--text-secondary); margin-top: 4px; margin-bottom: 8px;">
+              Dispara aviso push/celular imediato em caso de falha ou queda.
+            </p>
+            <button type="button" id="btn-ops-test-alert" class="btn-action btn-secondary" style="font-size: 0.76rem; padding: 5px 10px;">Testar Aviso no Celular</button>
+          </div>
+        </div>
+
+        <h4 style="font-size: 0.82rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px;">Backups Noturnos & Alertas Registrados:</h4>
+        <div id="saas-ops-logs" style="max-height: 200px; overflow-y: auto; background: var(--bg-subtle); padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border); font-size: 0.78rem;">
+          Carregando status do servidor...
+        </div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- Toast de Notificação Flutuante -->
   <div id="app-toast" class="app-toast"></div>
 
@@ -748,7 +923,7 @@
   </footer>
 
   <!-- Scripts -->
-  <script src="js/qrcode.min.js?v=11.0"></script>
-  <script src="js/app.js?v=11.0"></script>
+  <script src="js/qrcode.min.js?v=12.0"></script>
+  <script src="js/app.js?v=12.0"></script>
 </body>
 </html>

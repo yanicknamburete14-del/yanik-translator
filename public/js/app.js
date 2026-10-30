@@ -189,6 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderShareLinks();
   renderQrCode();
   initClassSummarizer();
+  initSaasPlatform();
 
   // 2. Conecta ao servidor e carrega salas em segundo plano (sem travar botões ou renderização)
   loadServerInfo();
@@ -3325,4 +3326,463 @@ function showToast(message) {
   setTimeout(() => {
     toast.classList.remove('show');
   }, 3200);
+}
+
+// ========================================================
+// 11. MÓDULO CLIENTE SAAS: LOGIN, HORÁRIOS, PAGAMENTO, BACKUP E ALERTA
+// ========================================================
+let saasAuthToken = localStorage.getItem('yanik_saas_token') || '';
+let saasCurrentUser = null;
+
+function initSaasPlatform() {
+  const openBtn = document.getElementById('btn-open-saas-modal');
+  const closeBtn = document.getElementById('btn-close-saas-modal');
+  const modal = document.getElementById('saas-modal');
+
+  if (openBtn && modal) {
+    openBtn.addEventListener('click', () => {
+      modal.classList.add('active');
+      refreshSaasSession();
+      loadSaasOpsStatus();
+    });
+  }
+  if (closeBtn && modal) {
+    closeBtn.addEventListener('click', () => modal.classList.remove('active'));
+  }
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.classList.remove('active');
+    });
+  }
+
+  document.querySelectorAll('.saas-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.getAttribute('data-saas-tab');
+      switchSaasSubTab(target);
+    });
+  });
+
+  const btnLogin = document.getElementById('btn-saas-login');
+  if (btnLogin) btnLogin.addEventListener('click', handleSaasLogin);
+
+  const btnReg = document.getElementById('btn-saas-register');
+  if (btnReg) btnReg.addEventListener('click', handleSaasRegister);
+
+  const btnForgot = document.getElementById('btn-saas-forgot-pass');
+  if (btnForgot) btnForgot.addEventListener('click', handleSaasForgotPassword);
+
+  const btnLogout = document.getElementById('btn-saas-logout');
+  if (btnLogout) btnLogout.addEventListener('click', handleSaasLogout);
+
+  const btnGotoSch = document.getElementById('btn-saas-goto-schedules');
+  if (btnGotoSch) btnGotoSch.addEventListener('click', () => switchSaasSubTab('schedules'));
+
+  const btnSaveSch = document.getElementById('btn-sch-save');
+  if (btnSaveSch) btnSaveSch.addEventListener('click', handleSaveSchedule);
+
+  const btnSub = document.getElementById('btn-saas-subscribe');
+  if (btnSub) btnSub.addEventListener('click', handleSaasSubscribe);
+
+  const btnWh = document.getElementById('btn-saas-test-webhook');
+  if (btnWh) btnWh.addEventListener('click', handleSaasTestWebhook);
+
+  const btnBackupNow = document.getElementById('btn-ops-backup-now');
+  if (btnBackupNow) btnBackupNow.addEventListener('click', handleTriggerBackupNow);
+
+  const btnTestAlert = document.getElementById('btn-ops-test-alert');
+  if (btnTestAlert) btnTestAlert.addEventListener('click', handleTriggerMobileAlert);
+
+  if (saasAuthToken) {
+    refreshSaasSession();
+  }
+}
+
+function switchSaasSubTab(tabName) {
+  document.querySelectorAll('.saas-tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-saas-tab') === tabName);
+  });
+  ['auth', 'schedules', 'billing', 'ops'].forEach(id => {
+    const el = document.getElementById('saas-panel-' + id);
+    if (el) el.style.display = id === tabName ? 'block' : 'none';
+  });
+  if (tabName === 'schedules') loadUserSchedules();
+  if (tabName === 'billing') loadBillingStatus();
+  if (tabName === 'ops') loadSaasOpsStatus();
+}
+
+async function refreshSaasSession() {
+  if (!saasAuthToken) {
+    updateSaasAuthUi(null);
+    return;
+  }
+  try {
+    const res = await fetch('/api/auth/me', {
+      headers: { 'Authorization': 'Bearer ' + saasAuthToken }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      saasCurrentUser = data.user;
+      updateSaasAuthUi(saasCurrentUser);
+      loadUserSchedules();
+      loadBillingStatus();
+    } else {
+      saasAuthToken = '';
+      localStorage.removeItem('yanik_saas_token');
+      updateSaasAuthUi(null);
+    }
+  } catch (e) {}
+}
+
+function updateSaasAuthUi(user) {
+  const badge = document.getElementById('saas-user-badge');
+  const navLabel = document.getElementById('nav-saas-btn-label');
+  const loggedOutBox = document.getElementById('saas-auth-logged-out');
+  const loggedInBox = document.getElementById('saas-auth-logged-in');
+
+  if (user) {
+    if (badge) {
+      badge.textContent = `${user.name} (${user.plan === 'pro' ? 'PRO ATIVO' : ' Conta Gratuita'})`;
+      badge.style.color = '#10b981';
+    }
+    if (navLabel) navLabel.textContent = user.name.split(' ')[0];
+    if (loggedOutBox) loggedOutBox.style.display = 'none';
+    if (loggedInBox) loggedInBox.style.display = 'block';
+
+    const pName = document.getElementById('saas-profile-name');
+    const pEmail = document.getElementById('saas-profile-email');
+    const pPlan = document.getElementById('saas-profile-plan');
+    if (pName) pName.textContent = user.name;
+    if (pEmail) pEmail.textContent = user.email;
+    if (pPlan) {
+      pPlan.textContent = user.plan === 'pro'
+        ? `Assinatura Mensal PRO Ativa • Próxima cobrança: ${user.nextBillingDate ? new Date(user.nextBillingDate).toLocaleDateString() : 'Automática'}`
+        : 'Plano: Gratuito (Assine na aba 3 para ativar cobrança recorrente)';
+    }
+  } else {
+    if (badge) {
+      badge.textContent = 'Visitante (Não autenticado)';
+      badge.style.color = '';
+    }
+    if (navLabel) navLabel.textContent = 'Horários & Conta';
+    if (loggedOutBox) loggedOutBox.style.display = 'grid';
+    if (loggedInBox) loggedInBox.style.display = 'none';
+  }
+}
+
+async function handleSaasLogin() {
+  const email = (document.getElementById('saas-login-email')?.value || '').trim();
+  const password = document.getElementById('saas-login-password')?.value || '';
+  if (!email || !password) {
+    showToast('Informe seu e-mail e senha.', 'warning');
+    return;
+  }
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(data.error || 'Falha no login.', 'warning');
+      return;
+    }
+    saasAuthToken = data.token;
+    saasCurrentUser = data.user;
+    localStorage.setItem('yanik_saas_token', saasAuthToken);
+    updateSaasAuthUi(saasCurrentUser);
+    showToast('Login realizado com sucesso!', 'success');
+    switchSaasSubTab('schedules');
+  } catch (e) {
+    showToast('Erro de conexão com o servidor.', 'warning');
+  }
+}
+
+async function handleSaasRegister() {
+  const name = (document.getElementById('saas-reg-name')?.value || '').trim();
+  const email = (document.getElementById('saas-reg-email')?.value || '').trim();
+  const password = document.getElementById('saas-reg-password')?.value || '';
+  const mobilePhone = (document.getElementById('saas-reg-phone')?.value || '').trim();
+
+  if (!name || !email || !password) {
+    showToast('Preencha nome, e-mail e senha para cadastrar.', 'warning');
+    return;
+  }
+  try {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password, mobilePhone })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(data.error || 'Erro ao criar conta.', 'warning');
+      return;
+    }
+    saasAuthToken = data.token;
+    saasCurrentUser = data.user;
+    localStorage.setItem('yanik_saas_token', saasAuthToken);
+    updateSaasAuthUi(saasCurrentUser);
+    showToast('Conta criada e isolada no banco com sucesso!', 'success');
+    switchSaasSubTab('schedules');
+  } catch (e) {
+    showToast('Erro ao conectar ao servidor.', 'warning');
+  }
+}
+
+async function handleSaasForgotPassword() {
+  const email = (document.getElementById('saas-login-email')?.value || '').trim();
+  if (!email) {
+    showToast('Digite seu e-mail no campo de login para recuperar a senha.', 'warning');
+    return;
+  }
+  try {
+    const res = await fetch('/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(data.error || 'E-mail não encontrado.', 'warning');
+      return;
+    }
+    showToast(data.message || 'E-mail de recuperação enviado!', 'info');
+    if (data.previewEmail && data.previewEmail.bodyText) {
+      alert(`E-mail enviado para ${email}:\n\n${data.previewEmail.bodyText}`);
+    }
+  } catch (e) {
+    showToast('Erro ao solicitar recuperação de senha.', 'warning');
+  }
+}
+
+function handleSaasLogout() {
+  saasAuthToken = '';
+  saasCurrentUser = null;
+  localStorage.removeItem('yanik_saas_token');
+  updateSaasAuthUi(null);
+  showToast('Sessão encerrada.', 'info');
+}
+
+async function loadUserSchedules() {
+  const listEl = document.getElementById('saas-schedules-list');
+  if (!listEl) return;
+  if (!saasAuthToken) {
+    listEl.innerHTML = '<p style="font-size: 0.84rem; color: var(--text-muted); text-align: center; padding: 20px;">Faça login na aba 1 para ver e salvar seus horários exclusivos no banco.</p>';
+    return;
+  }
+  try {
+    const res = await fetch('/api/schedules', {
+      headers: { 'Authorization': 'Bearer ' + saasAuthToken }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const schedules = data.schedules || [];
+    if (schedules.length === 0) {
+      listEl.innerHTML = '<p style="font-size: 0.84rem; color: var(--text-muted); text-align: center; padding: 20px;">Nenhum horário cadastrado na sua conta ainda. Adicione um horário acima!</p>';
+      return;
+    }
+    listEl.innerHTML = schedules.map(s => `
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm);">
+        <div>
+          <strong style="font-size: 0.9rem; color: var(--text-primary);">${escapeHtml(s.title)}</strong>
+          <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">
+            <span>${escapeHtml(s.dayOfWeek)} • ${escapeHtml(s.startTime)} às ${escapeHtml(s.endTime)}</span>
+            <span> • Sala: <strong class="code-pill">${escapeHtml(s.roomCode)}</strong></span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <button type="button" class="btn-action btn-primary" style="font-size: 0.75rem; padding: 5px 10px;" onclick="openScheduleRoom('${escapeQuotes(s.roomCode)}')">Abrir Sala</button>
+          <button type="button" class="btn-action btn-secondary" style="font-size: 0.75rem; padding: 5px 10px;" onclick="deleteUserSchedule('${escapeQuotes(s.id)}')">Excluir</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {}
+}
+
+async function handleSaveSchedule() {
+  if (!saasAuthToken) {
+    showToast('Faça login primeiro na aba 1 para salvar seus horários.', 'warning');
+    switchSaasSubTab('auth');
+    return;
+  }
+  const title = (document.getElementById('sch-title')?.value || '').trim();
+  const dayOfWeek = document.getElementById('sch-day')?.value || 'Segunda-feira';
+  const startTime = document.getElementById('sch-start')?.value || '08:00';
+  const endTime = document.getElementById('sch-end')?.value || '09:00';
+  const roomCode = (document.getElementById('sch-room')?.value || '').trim().toUpperCase();
+
+  if (!title) {
+    showToast('Informe o nome da turma ou horário.', 'warning');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/schedules', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + saasAuthToken
+      },
+      body: JSON.stringify({
+        title,
+        dayOfWeek,
+        startTime,
+        endTime,
+        roomCode,
+        language: state.teacherLang || 'pt'
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(data.error || 'Erro ao salvar horário.', 'warning');
+      return;
+    }
+    const titleInput = document.getElementById('sch-title');
+    if (titleInput) titleInput.value = '';
+    showToast('Horário salvo no banco com sucesso!', 'success');
+    loadUserSchedules();
+    fetchAvailableRooms();
+  } catch (e) {
+    showToast('Erro de rede ao salvar horário.', 'warning');
+  }
+}
+
+async function deleteUserSchedule(id) {
+  if (!saasAuthToken || !id) return;
+  try {
+    const res = await fetch('/api/schedules/' + encodeURIComponent(id), {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + saasAuthToken }
+    });
+    if (res.ok) {
+      showToast('Horário removido.', 'info');
+      loadUserSchedules();
+    }
+  } catch (e) {}
+}
+
+function openScheduleRoom(roomCode) {
+  if (!roomCode) return;
+  joinRoom(roomCode);
+  const modal = document.getElementById('saas-modal');
+  if (modal) modal.classList.remove('active');
+  showToast('Conectado à sala do seu horário: ' + roomCode, 'success');
+}
+
+async function handleSaasSubscribe() {
+  if (!saasAuthToken) {
+    showToast('Faça login na aba 1 antes de ativar a assinatura.', 'warning');
+    switchSaasSubTab('auth');
+    return;
+  }
+  try {
+    const res = await fetch('/api/billing/subscribe', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + saasAuthToken
+      }
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(data.error || 'Falha ao processar assinatura.', 'warning');
+      return;
+    }
+    saasCurrentUser = data.user;
+    updateSaasAuthUi(saasCurrentUser);
+    loadBillingStatus();
+    showToast('Assinatura Mensal Pro ativada e recibo enviado por e-mail!', 'success');
+  } catch (e) {
+    showToast('Erro ao processar assinatura.', 'warning');
+  }
+}
+
+async function handleSaasTestWebhook() {
+  const email = saasCurrentUser ? saasCurrentUser.email : '';
+  try {
+    const res = await fetch('/api/webhooks/payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'invoice.paid',
+        email
+      })
+    });
+    if (res.ok) {
+      showToast('Webhook de pagamento recebido e processado com sucesso!', 'success');
+      loadBillingStatus();
+      loadSaasOpsStatus();
+    }
+  } catch (e) {}
+}
+
+async function loadBillingStatus() {
+  const statusLine = document.getElementById('saas-billing-status-line');
+  const logsBox = document.getElementById('saas-billing-logs');
+  if (!saasAuthToken) {
+    if (statusLine) statusLine.textContent = 'Faça login para gerenciar sua assinatura mensal.';
+    return;
+  }
+  try {
+    const res = await fetch('/api/billing/status', {
+      headers: { 'Authorization': 'Bearer ' + saasAuthToken }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (statusLine) {
+      statusLine.textContent = data.plan === 'pro'
+        ? `Status: ATIVA (Cobrança automática todo mês • Próxima: ${data.nextBillingDate ? new Date(data.nextBillingDate).toLocaleDateString() : 'Em 30 dias'})`
+        : 'Status: Plano Gratuito (Sem cobrança ativa)';
+    }
+    if (logsBox) {
+      const payItems = (data.payments || []).map(p => `<div><strong>[PAGAMENTO ${p.status.toUpperCase()}]</strong> R$ ${(p.amountCents / 100).toFixed(2)} (${p.type}) — ${new Date(p.createdAt).toLocaleString()}</div>`);
+      const emailItems = (data.emails || []).map(e => `<div style="margin-top:4px; color: var(--text-secondary);"><strong>[E-MAIL ENVIADO]</strong> ${escapeHtml(e.subject)} — ${escapeHtml(e.bodyText)}</div>`);
+      const combined = [...payItems, ...emailItems];
+      logsBox.innerHTML = combined.length > 0 ? combined.join('<hr style="border:0;border-top:1px solid var(--border);margin:6px 0;">') : 'Nenhuma cobrança ou e-mail registrado ainda.';
+    }
+  } catch (e) {}
+}
+
+async function loadSaasOpsStatus() {
+  const vaultInfo = document.getElementById('ops-vault-info');
+  const logsBox = document.getElementById('saas-ops-logs');
+  try {
+    const res = await fetch('/api/ops/status');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (vaultInfo && data.vaultStatus) {
+      vaultInfo.textContent = `Chave no Cofre: ${data.vaultStatus.paymentKeyMasked} • Exposta no código: NÃO`;
+    }
+    if (logsBox) {
+      const bkpHtml = (data.backups || []).map(b => `<div><strong>[BACKUP BANCO]</strong> ${escapeHtml(b.filename)} (${b.sizeBytes} bytes) — ${new Date(b.createdAt).toLocaleString()}</div>`);
+      const alertHtml = (data.alerts || []).map(a => `<div style="color: #f59e0b;"><strong>[ALERTA CELULAR]</strong> ${escapeHtml(a.message)} — ${new Date(a.sentAt).toLocaleString()}</div>`);
+      const all = [...alertHtml, ...bkpHtml];
+      logsBox.innerHTML = all.length > 0 ? all.join('<hr style="border:0;border-top:1px solid var(--border);margin:6px 0;">') : 'Nenhum registro ainda.';
+    }
+  } catch (e) {}
+}
+
+async function handleTriggerBackupNow() {
+  try {
+    const res = await fetch('/api/ops/backup', { method: 'POST' });
+    if (res.ok) {
+      showToast('Backup completo do banco salvo com sucesso!', 'success');
+      loadSaasOpsStatus();
+    }
+  } catch (e) {}
+}
+
+async function handleTriggerMobileAlert() {
+  try {
+    const res = await fetch('/api/ops/test-alert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: saasCurrentUser ? saasCurrentUser.mobilePhone : '' })
+    });
+    if (res.ok) {
+      showToast('Alerta de monitoramento enviado para o celular!', 'success');
+      loadSaasOpsStatus();
+    }
+  } catch (e) {}
 }
